@@ -11,6 +11,11 @@ import { useGameStore } from "@/store/useGameStore";
 import { loadRoadGraph, type PathfindingMode } from "@/engine/osmGraph";
 import { HOST_MIGRATE_MS } from "@/engine/connectionGrace";
 import { saveLastSummary } from "@/lib/lastSummary";
+import {
+  saveMatchProgress,
+  loadMatchProgress,
+  clearMatchProgress,
+} from "@/lib/matchProgress";
 import type { PlayerWorld, WorkerIn, WorkerOut, Density } from "@/engine/roomTick.worker";
 import type {
   EndReason,
@@ -62,7 +67,7 @@ export default function PlayPage() {
   const maxSpeedMs = useGameStore((s) => s.maxSpeedMs);
   const knockdowns = useGameStore((s) => s.knockdowns);
   const autoRespawns = useGameStore((s) => s.autoRespawns);
-  const { reading, start } = useGPS();
+  const { status: gpsStatus, reading, start } = useGPS();
 
   const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null);
   const [status, setStatus] = useState<string>("Loading match…");
@@ -80,6 +85,7 @@ export default function PlayPage() {
   const endReasonRef = useRef<EndReason>("HOST_ENDED");
   const lastTickAtRef = useRef(0);
   const restoreTickRef = useRef<WorldStateTick | null>(null);
+  const lastProgressSaveRef = useRef(0);
   const snapshotRef = useRef<RoomSnapshot | null>(null);
   snapshotRef.current = snapshot;
   const playerIdRef = useRef(playerId);
@@ -89,6 +95,21 @@ export default function PlayPage() {
 
   useEffect(() => {
     void start();
+    // hydrate prior match progress (refresh recovery)
+    const prog = loadMatchProgress(roomCode);
+    if (prog) {
+      const s = useGameStore.getState();
+      useGameStore.setState({
+        distanceM: Math.max(s.distanceM, prog.distanceM),
+        maxSpeedMs: Math.max(s.maxSpeedMs, prog.maxSpeedMs),
+        knockdowns: Math.max(s.knockdowns, prog.knockdowns),
+        gpsTrack: prog.gpsTrack.length > 0 ? prog.gpsTrack : s.gpsTrack,
+      });
+      if (prog.worldTick) {
+        restoreTickRef.current = prog.worldTick;
+        setWorldTick(prog.worldTick);
+      }
+    }
     void fetchRoomSnapshot(roomCode).then((snap) => {
       setSnapshot(snap);
       if (!snap) setStatus("Room not found");
@@ -98,13 +119,25 @@ export default function PlayPage() {
           isHost: snap.host_player_id === useGameStore.getState().playerId,
           roomId: snap.room_id,
         });
+        // merge server-side stats (heartbeat) — keep the larger value
+        const me = snap.players.find(
+          (p) => p.player_id === useGameStore.getState().playerId
+        );
+        if (me) {
+          const s = useGameStore.getState();
+          useGameStore.setState({
+            distanceM: Math.max(s.distanceM, me.distance_m ?? 0),
+            maxSpeedMs: Math.max(s.maxSpeedMs, me.max_speed_ms ?? 0),
+          });
+        }
         if (snap.status === "ENDED") {
           setEndedLocally(true);
           setMatchEnded(true);
+          clearMatchProgress();
         }
       }
     });
-  }, [roomCode, start, setMatchEnded]);
+  }, [roomCode, start, setMatchEnded, setWorldTick]);
 
   useEffect(() => {
     if (reading) {
@@ -113,13 +146,48 @@ export default function PlayPage() {
     }
   }, [reading, setSelfPos, recordGps]);
 
+  const persistProgress = useCallback(
+    (tick: WorldStateTick | null, force = false) => {
+      const now = Date.now();
+      if (!force && now - lastProgressSaveRef.current < 2000) return;
+      lastProgressSaveRef.current = now;
+      const s = useGameStore.getState();
+      const rid = snapshotRef.current?.room_id ?? s.roomId;
+      saveMatchProgress({
+        roomCode,
+        roomId: rid,
+        distanceM: s.distanceM,
+        maxSpeedMs: s.maxSpeedMs,
+        knockdowns: s.knockdowns,
+        gpsTrack: s.gpsTrack,
+        worldTick: tick ?? useGameStore.getState().worldTick,
+      });
+    },
+    [roomCode]
+  );
+
   const onTick = useCallback(
     (tick: WorldStateTick) => {
       lastTickAtRef.current = Date.now();
       setWorldTick(tick);
+      persistProgress(tick);
     },
-    [setWorldTick]
+    [setWorldTick, persistProgress]
   );
+
+  // flush progress on tab hide / unload
+  useEffect(() => {
+    const flush = () => persistProgress(null, true);
+    const onVis = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("beforeunload", flush);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [persistProgress]);
 
   const prevSelfState = useRef<string>("ALIVE");
   useEffect(() => {
@@ -173,6 +241,7 @@ export default function PlayPage() {
         setMatchEnded(true);
         setEndedLocally(true);
         setStatus("Match ended");
+        clearMatchProgress();
       } catch {
         setStatus("End failed");
         endingRef.current = false;
@@ -224,6 +293,7 @@ export default function PlayPage() {
         }
         setMatchEnded(true);
         setEndedLocally(true);
+        clearMatchProgress();
         workerRef.current?.postMessage({ type: "stop" } satisfies WorkerIn);
       } else if (action.action === "HOST_MIGRATED") {
         const newHost = action.data.new_host_player_id as string | undefined;
@@ -258,6 +328,8 @@ export default function PlayPage() {
         setMatchSummary(null);
         setEndedLocally(false);
         endingRef.current = false;
+        restoreTickRef.current = null;
+        clearMatchProgress();
       }
     },
   });
@@ -587,6 +659,34 @@ export default function PlayPage() {
         endReason={matchSummary.gameplay_metrics.end_reason}
         track={gpsTrack}
       />
+    );
+  }
+
+  const gpsOk = gpsStatus === "granted" || gpsStatus === "simulated";
+  if (!gpsOk) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 p-4 text-center">
+        <h1 className="text-xl font-bold tracking-widest text-safe">OUTBREAK</h1>
+        <p className="text-sm text-text">
+          {gpsStatus === "denied"
+            ? "Location access denied. Enable GPS for this site in browser settings, then reload."
+            : gpsStatus === "unavailable"
+              ? "GPS unavailable on this device."
+              : "Allow location access to play."}
+        </p>
+        {gpsStatus !== "denied" && gpsStatus !== "unavailable" && (
+          <button
+            data-testid="allow-gps"
+            onClick={() => start()}
+            className="rounded bg-safe px-4 py-3 text-base font-bold text-bg"
+          >
+            Allow GPS
+          </button>
+        )}
+        {gpsStatus === "requesting" && (
+          <p className="text-sm text-muted">Waiting for browser permission…</p>
+        )}
+      </main>
     );
   }
 

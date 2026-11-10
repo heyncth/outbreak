@@ -93,8 +93,14 @@ export function LobbyView({ roomCode }: LobbyViewProps) {
     }
   };
 
+  const gpsOk = gpsStatus === "granted" || gpsStatus === "simulated";
+
   const onStart = async () => {
     if (!playerId || !snapshot) return;
+    if (!gpsOk) {
+      setError("Allow GPS before starting the match.");
+      return;
+    }
     setStarting(true);
     setError(null);
     try {
@@ -209,18 +215,25 @@ export function LobbyView({ roomCode }: LobbyViewProps) {
         <button
           data-testid="start-match"
           onClick={onStart}
-          disabled={!isHost || starting || count < 1}
+          disabled={!isHost || starting || count < 1 || !gpsOk}
           className="rounded bg-safe px-4 py-3 text-base font-bold text-bg disabled:opacity-40"
         >
-          {isHost ? (starting ? "Starting…" : "Start Match") : "Waiting for host…"}
+          {isHost ? (starting ? "Starting…" : gpsOk ? "Start Match" : "Allow GPS first") : "Waiting for host…"}
         </button>
       )}
       {phase === "active" && (
         <button
-          onClick={() => router.push(`/room/${roomCode}/play`)}
-          className="rounded border border-safe px-4 py-3 text-safe"
+          onClick={() => {
+            if (!gpsOk) {
+              setError("Allow GPS before entering the match.");
+              return;
+            }
+            router.push(`/room/${roomCode}/play`);
+          }}
+          disabled={!gpsOk}
+          className="rounded border border-safe px-4 py-3 text-safe disabled:opacity-40"
         >
-          Enter Match
+          {gpsOk ? "Enter Match" : "Allow GPS first"}
         </button>
       )}
       {phase === "ended" && (

@@ -7,6 +7,7 @@ import { MatchSummary } from "@/components/summary/MatchSummary";
 import { useGPS } from "@/hooks/useGPS";
 import { useGameStore } from "@/store/useGameStore";
 import { loadLastSummary } from "@/lib/lastSummary";
+import { loadMatchProgress, clearMatchProgress } from "@/lib/matchProgress";
 import type { GpsStatus } from "@/hooks/useGPS";
 
 const GPS_LABEL: Record<GpsStatus, string> = {
@@ -41,6 +42,7 @@ export default function HomePage() {
   const [gpsReady, setGpsReady] = useState(false);
   const [showLastSummary, setShowLastSummary] = useState(false);
   const lastSummary = useMemo(() => loadLastSummary(), []);
+  const activeProgress = useMemo(() => loadMatchProgress(), []);
 
   useEffect(() => {
     const playerId = ensurePlayerId();
@@ -56,9 +58,10 @@ export default function HomePage() {
     if (reading) setSelfPos({ lat: reading.lat, lng: reading.lng });
   }, [reading, setSelfPos]);
 
+  const gpsOk = status === "granted" || status === "simulated";
   const canSubmit = useMemo(
-    () => nickname.trim().length >= 2 && nickname.trim().length <= 30 && status !== "idle" && status !== "requesting",
-    [nickname, status]
+    () => nickname.trim().length >= 2 && nickname.trim().length <= 30 && gpsOk,
+    [nickname, gpsOk]
   );
 
   const center = useMemo(
@@ -167,6 +170,16 @@ export default function HomePage() {
         <p role="alert" className="text-sm text-danger">
           {error}
         </p>
+      )}
+
+      {activeProgress && (
+        <button
+          data-testid="resume-match"
+          onClick={() => router.push(`/room/${activeProgress.roomCode}/play`)}
+          className="rounded border border-safe bg-safe/10 px-4 py-3 text-base font-bold text-safe"
+        >
+          Resume match · {activeProgress.roomCode}
+        </button>
       )}
 
       {lastSummary && (

@@ -11,6 +11,9 @@ export default defineConfig({
     baseURL: "http://localhost:3000",
     trace: "retain-on-failure",
     serviceWorkers: "block",
+    permissions: ["geolocation"],
+    geolocation: { latitude: 16.054407, longitude: 108.202167 },
+    locale: "en-US",
   },
   webServer: {
     command: "pnpm start",

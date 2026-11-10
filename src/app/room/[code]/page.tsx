@@ -50,7 +50,7 @@ export default function RoomPage() {
       setStep("need_name");
       return;
     }
-    if (gpsStatus === "idle" || gpsStatus === "requesting") {
+    if (gpsStatus !== "granted" && gpsStatus !== "simulated") {
       setStep("checking");
       return;
     }
@@ -101,8 +101,24 @@ export default function RoomPage() {
       <main className="flex min-h-screen flex-col items-center justify-center gap-2 p-6">
         <h1 className="text-xl font-bold tracking-widest text-safe">ROOM {roomCode}</h1>
         <p className="text-sm text-muted">
-          {step === "joining" ? "Joining…" : gpsStatus === "requesting" ? "Waiting for GPS…" : "Connecting…"}
+          {step === "joining"
+            ? "Joining…"
+            : gpsStatus === "requesting" || gpsStatus === "idle"
+              ? "Waiting for GPS permission…"
+              : gpsStatus === "denied"
+                ? "Location denied. Enable GPS in browser settings, then reload."
+                : gpsStatus === "unavailable"
+                  ? "GPS unavailable on this device."
+                  : "Connecting…"}
         </p>
+        {(gpsStatus === "denied" || gpsStatus === "unavailable") && (
+          <button
+            onClick={() => router.push("/")}
+            className="rounded border border-line px-4 py-2 text-sm"
+          >
+            Home
+          </button>
+        )}
       </main>
     );
   }

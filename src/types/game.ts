@@ -26,6 +26,8 @@ export interface RoomPlayer {
   state: PlayerState;
   hp: number;
   max_hp: number;
+  distance_m?: number;
+  max_speed_ms?: number;
 }
 
 export interface RoomSnapshot {

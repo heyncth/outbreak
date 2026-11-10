@@ -28,7 +28,7 @@ export interface GpsReading extends LatLng {
 const DEV_SIM = process.env.NEXT_PUBLIC_DEV_SIMULATE_GPS === "true";
 
 export function useGPS() {
-  const [status, setStatus] = useState<GpsStatus>(DEV_SIM ? "simulated" : "idle");
+  const [status, setStatus] = useState<GpsStatus>("idle");
   const [reading, setReading] = useState<GpsReading | null>(null);
   const filterRef = useRef<GpsFilterState>(createGpsFilterState());
   const watchIdRef = useRef<number | null>(null);
@@ -60,18 +60,16 @@ export function useGPS() {
   );
 
   const start = useCallback(() => {
-    if (DEV_SIM) {
-      setStatus("simulated");
-      return;
-    }
     if (!("geolocation" in navigator)) {
       setStatus("unavailable");
       return;
     }
+    if (watchIdRef.current !== null) return;
     setStatus("requesting");
+    // always hit the browser API so the permission prompt fires in every mode
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
-        setStatus("granted");
+        setStatus(DEV_SIM ? "simulated" : "granted");
         applySample({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
@@ -92,7 +90,7 @@ export function useGPS() {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
-    setStatus(DEV_SIM ? "simulated" : "idle");
+    setStatus("idle");
   }, []);
 
   useEffect(() => () => stop(), [stop]);
