@@ -16,6 +16,7 @@ import {
   loadMatchProgress,
   clearMatchProgress,
 } from "@/lib/matchProgress";
+import { isDevSim } from "@/lib/devSim";
 import type { PlayerWorld, WorkerIn, WorkerOut, Density } from "@/engine/roomTick.worker";
 import type {
   EndReason,
@@ -625,7 +626,7 @@ export default function PlayPage() {
 
   // dev-only force knock for e2e
   useEffect(() => {
-    if (process.env.NEXT_PUBLIC_DEV_SIMULATE_GPS !== "true") return;
+    if (!isDevSim()) return;
     const w = window as unknown as {
       __outbreak?: { forceKnock: (id?: string) => void };
     };
@@ -662,7 +663,7 @@ export default function PlayPage() {
     );
   }
 
-  const gpsOk = gpsStatus === "granted" || gpsStatus === "simulated";
+  const gpsOk = gpsStatus === "granted";
   if (!gpsOk) {
     return (
       <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 p-4 text-center">

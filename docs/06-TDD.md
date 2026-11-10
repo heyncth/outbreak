@@ -237,7 +237,7 @@ Channel: `room:{room_code}`
 
 ### 9.2 Multi-client (Playwright)
 
-- Two contexts, `NEXT_PUBLIC_DEV_SIMULATE_GPS=true`, same room code.
+- Two contexts, devsim flag on (`localStorage.outbreak_devsim=1`), same room code.
 - Assert telemetry sync, world tick apply, host migration when Host tab closes > 15 s (test may use accelerated timers).
 
 ### 9.3 Field checklist (manual)

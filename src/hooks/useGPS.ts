@@ -7,6 +7,7 @@ import {
   noiseForSpeed,
   type GpsFilterState,
 } from "@/lib/geoUtils";
+import { isDevSim } from "@/lib/devSim";
 import type { LatLng, TelemetryFlag } from "@/types/game";
 
 export type GpsStatus =
@@ -14,8 +15,7 @@ export type GpsStatus =
   | "requesting"
   | "granted"
   | "denied"
-  | "unavailable"
-  | "simulated";
+  | "unavailable";
 
 export interface GpsReading extends LatLng {
   accuracy_m: number;
@@ -25,22 +25,39 @@ export interface GpsReading extends LatLng {
   timestamp: number;
 }
 
-const DEV_SIM = process.env.NEXT_PUBLIC_DEV_SIMULATE_GPS === "true";
-
 export function useGPS() {
   const [status, setStatus] = useState<GpsStatus>("idle");
   const [reading, setReading] = useState<GpsReading | null>(null);
+  const [devSim, setDevSim] = useState(false);
   const filterRef = useRef<GpsFilterState>(createGpsFilterState());
   const watchIdRef = useRef<number | null>(null);
 
+  useEffect(() => {
+    setDevSim(isDevSim());
+  }, []);
+
   const applySample = useCallback(
-    (raw: { lat: number; lng: number; accuracy_m: number; speed_ms: number; timestamp: number }, extraFlags: TelemetryFlag[] = []) => {
+    (
+      raw: {
+        lat: number;
+        lng: number;
+        accuracy_m: number;
+        speed_ms: number;
+        timestamp: number;
+      },
+      extraFlags: TelemetryFlag[] = []
+    ) => {
       const result = filterGps(filterRef.current, raw);
       if (!result.accept || !result.sample) {
         if (result.flags.includes("LOW_ACCURACY")) {
           setReading((prev) =>
             prev
-              ? { ...prev, flags: Array.from(new Set([...prev.flags, "LOW_ACCURACY" as TelemetryFlag])) }
+              ? {
+                  ...prev,
+                  flags: Array.from(
+                    new Set([...prev.flags, "LOW_ACCURACY" as TelemetryFlag])
+                  ),
+                }
               : null
           );
         }
@@ -52,7 +69,9 @@ export function useGPS() {
         accuracy_m: result.sample.accuracy_m,
         speed_ms: result.sample.speed_ms,
         noise: noiseForSpeed(result.sample.speed_ms),
-        flags: Array.from(new Set([...extraFlags, ...result.flags])) as TelemetryFlag[],
+        flags: Array.from(
+          new Set([...extraFlags, ...result.flags])
+        ) as TelemetryFlag[],
         timestamp: result.sample.timestamp,
       });
     },
@@ -66,10 +85,9 @@ export function useGPS() {
     }
     if (watchIdRef.current !== null) return;
     setStatus("requesting");
-    // always hit the browser API so the permission prompt fires in every mode
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
-        setStatus(DEV_SIM ? "simulated" : "granted");
+        setStatus("granted");
         applySample({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
@@ -79,7 +97,9 @@ export function useGPS() {
         });
       },
       (err) => {
-        setStatus(err.code === err.PERMISSION_DENIED ? "denied" : "unavailable");
+        setStatus(
+          err.code === err.PERMISSION_DENIED ? "denied" : "unavailable"
+        );
       },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
     );
@@ -95,5 +115,5 @@ export function useGPS() {
 
   useEffect(() => () => stop(), [stop]);
 
-  return { status, reading, start, stop, devSim: DEV_SIM };
+  return { status, reading, start, stop, devSim };
 }

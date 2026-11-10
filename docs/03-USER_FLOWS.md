@@ -81,7 +81,7 @@
   4. **Rematch:** Host **[🔄 Rematch]** → `status = 'WAITING'`, clear start/end timestamps, delete old `safe_zones`/zombies; reset all player stats to defaults; return all clients to Lobby.
 
 ### Flow 9: Dev GPS simulator
-- **Trigger:** App runs with `NEXT_PUBLIC_DEV_SIMULATE_GPS=true`.
+- **Trigger:** Runtime devsim flag on (`?devsim=1`).
 - **Steps:**
   1. `useGPS` detects flag; Dev panel can bypass hardware watcher.
   2. **Shift+Click** map or **WASD** produces `{ lat, lng }` at slider speed `0.0–6.0 m/s`.

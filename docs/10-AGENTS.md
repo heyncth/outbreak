@@ -8,7 +8,7 @@ Specs live in `docs/01`–`docs/09`. On conflict: **docs win over model memory**
 ## 1. Strict invariants (never violate)
 
 1. **No Stamina, no Infection.** Player stats in V1 are only `hp` and `max_hp` (plus derived distance/noise fields already in schema).
-2. **No virtual joystick in production.** Character moves only from `navigator.geolocation.watchPosition` (or dev sim when `NEXT_PUBLIC_DEV_SIMULATE_GPS === 'true'`).
+2. **No virtual joystick in production.** Character moves only from `navigator.geolocation.watchPosition` (or dev sim when runtime flag `?devsim=1` is set).
 3. **No zombie wall/water clipping when graph exists.** `WANDER` / `INVESTIGATE` / `CHASE` / `SEARCH` / `SWARM` follow OSM graph edges from `osmGraph.ts`. Straight-line only if `pathfinding_mode === 'DIRECT_VECTOR_FALLBACK'`.
 4. **No auth wall.** Nickname + `player_id` UUID in `localStorage` key `outbreak_player_session`. No signup/login UI in V1.
 5. **No per-second Postgres writes for positions.** Positions go Realtime Broadcast only. DB writes are room lifecycle + rescue/end/rematch/safe-zone + match_results.

@@ -11,6 +11,9 @@ test("host create → guest join → start → knock → rescue → end → summ
 }) => {
   const hostCtx = await browser.newContext();
   const guestCtx = await browser.newContext();
+  // forceKnock hook reads runtime localStorage flag (no env)
+  await hostCtx.addInitScript(() => localStorage.setItem("outbreak_devsim", "1"));
+  await guestCtx.addInitScript(() => localStorage.setItem("outbreak_devsim", "1"));
   const host = await hostCtx.newPage();
   const guest = await guestCtx.newPage();
 

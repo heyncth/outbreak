@@ -7,6 +7,7 @@ import { MatchSummary } from "@/components/summary/MatchSummary";
 import { useGPS } from "@/hooks/useGPS";
 import { useGameStore } from "@/store/useGameStore";
 import { loadLastSummary } from "@/lib/lastSummary";
+import { applyDevSimFromSearch } from "@/lib/devSim";
 import { loadMatchProgress, clearMatchProgress } from "@/lib/matchProgress";
 import type { GpsStatus } from "@/hooks/useGPS";
 
@@ -16,7 +17,6 @@ const GPS_LABEL: Record<GpsStatus, string> = {
   granted: "GPS: On",
   denied: "GPS: Denied",
   unavailable: "GPS: Unavailable",
-  simulated: "GPS: Dev Sim",
 };
 
 function ensurePlayerId(): string {
@@ -47,6 +47,7 @@ export default function HomePage() {
   useEffect(() => {
     const playerId = ensurePlayerId();
     setSession({ playerId, nickname: "" });
+    applyDevSimFromSearch();
     start();
   }, [setSession, start]);
 
@@ -58,7 +59,7 @@ export default function HomePage() {
     if (reading) setSelfPos({ lat: reading.lat, lng: reading.lng });
   }, [reading, setSelfPos]);
 
-  const gpsOk = status === "granted" || status === "simulated";
+  const gpsOk = status === "granted";
   const canSubmit = useMemo(
     () => nickname.trim().length >= 2 && nickname.trim().length <= 30 && gpsOk,
     [nickname, gpsOk]
@@ -106,12 +107,22 @@ export default function HomePage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col gap-4 p-4">
-      <header className="flex items-baseline justify-between border-b border-line pb-3">
-        <h1 className="text-2xl font-bold tracking-widest text-safe">OUTBREAK</h1>
+      <header className="flex items-center justify-between border-b border-line pb-3">
+        <div className="flex items-center gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/logo.webp"
+            alt="OUTBREAK"
+            width={32}
+            height={32}
+            className="h-8 w-8 rounded"
+          />
+          <h1 className="text-2xl font-bold tracking-widest text-safe">OUTBREAK</h1>
+        </div>
         <span
           data-testid="gps-chip"
           className={`text-xs ${
-            status === "granted" || status === "simulated"
+            status === "granted"
               ? "text-safe"
               : status === "denied" || status === "unavailable"
                 ? "text-danger"
@@ -119,6 +130,7 @@ export default function HomePage() {
           }`}
         >
           {GPS_LABEL[status]}
+          {devSim ? " · devsim" : ""}
         </span>
       </header>
 
@@ -198,7 +210,7 @@ export default function HomePage() {
         </p>
       )}
       {devSim && (
-        <p className="text-xs text-muted">Dev sim mode: GPS simulated.</p>
+        <p className="text-xs text-muted">Dev sim on — append ?devsim=0 to disable.</p>
       )}
       {!gpsReady && status !== "denied" && (
         <p className="text-sm text-muted">Waiting for GPS…</p>

@@ -14,5 +14,6 @@ Env (optional):
 ```
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-NEXT_PUBLIC_DEV_SIMULATE_GPS=true
 ```
+
+Dev sim (runtime, default off): open `/?devsim=1` to enable, `/?devsim=0` to disable.

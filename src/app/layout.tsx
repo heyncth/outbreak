@@ -5,6 +5,21 @@ export const metadata: Metadata = {
   title: "OUTBREAK",
   description: "GPS zombie survival co-op",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: "/icons/icon-512.png",
+  },
+  openGraph: {
+    title: "OUTBREAK",
+    description: "GPS zombie survival co-op",
+    images: ["/brand/banner-169.webp"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "OUTBREAK",
+    description: "GPS zombie survival co-op",
+    images: ["/brand/banner-916.webp"],
+  },
 };
 
 export const viewport: Viewport = {

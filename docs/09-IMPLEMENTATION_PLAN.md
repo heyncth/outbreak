@@ -108,7 +108,7 @@ Verification gate: **phase-end only** (unit + manual checklist at phase boundary
   - [ ] 5-stage filter implemented (TDD §4)
   - [ ] `watchPosition` high accuracy; noise bands match spec
   - [ ] Wake lock request/release + `visibilitychange` re-acquire in try/catch
-  - [ ] Dev sim path gated by `NEXT_PUBLIC_DEV_SIMULATE_GPS`
+  - [ ] Dev sim path gated by `?devsim=1` runtime flag
 
 #### Task 1.3 — GameMap integration
 - **Files:** `src/components/map/GameMap.tsx`

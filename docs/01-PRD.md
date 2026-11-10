@@ -127,7 +127,7 @@
 | V1-09 | Match end (all knocked / host stop) + Summary | Persist `match_results` |
 | V1-10 | Wake Lock + disconnect grace 90 s | Host migrate 15 s |
 | V1-11 | PWA install + offline app shell | Network-resilient, not full offline play |
-| V1-12 | Dev GPS simulator (`NEXT_PUBLIC_DEV_SIMULATE_GPS`) | Dev-only click/WASD |
+| V1-12 | Dev GPS simulator (`?devsim=1` runtime flag) | Dev-only click/WASD |
 
 ### 7.2 V2+ deferred
 

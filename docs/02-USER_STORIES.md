@@ -73,9 +73,9 @@
 
 ### US-2.3: Dev GPS simulator
 - **Priority:** `[M] (Dev/Testing)` | **Effort:** `2 pts`
-- **Story:** As a developer, I want click-to-move / WASD when `NEXT_PUBLIC_DEV_SIMULATE_GPS=true` to test AI and rescue at a desk.
+- **Story:** As a developer, I want click-to-move / WASD when `?devsim=1` is set to test AI and rescue at a desk.
 - **AC:**
-  1. **Given** `NEXT_PUBLIC_DEV_SIMULATE_GPS === 'true'`, **When** Game opens, **Then** show `🛠️ DEV SIMULATOR` panel.
+  1. **Given** runtime devsim flag on, **When** Game opens, **Then** show `🛠️ DEV SIMULATOR` panel.
   2. **Shift+Click** on map teleports/moves player to clicked point; **WASD** moves at speed from slider `0–6.0 m/s`.
   3. Simulated coords feed the **same** telemetry pipeline as real GPS (noise, A*, knockdown, rescue).
   4. **Security invariant:** When env ≠ `'true'`, all sim listeners are stripped/disabled in the production bundle.

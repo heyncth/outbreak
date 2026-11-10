@@ -179,7 +179,7 @@
 - Backdrop `rgba(0,0,0,0.72)`, surface `#111827`, border `#1F2937`.
 
 ### 4.6 `DevSimulatorPanel`
-- Visible only if `NEXT_PUBLIC_DEV_SIMULATE_GPS === 'true'`.
+- Visible only if runtime devsim flag is on (`?devsim=1` → `localStorage.outbreak_devsim`).
 - z-index `--z-dev`; does not cover bottom thumb zone on portrait.
 
 ---

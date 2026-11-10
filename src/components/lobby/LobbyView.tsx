@@ -93,7 +93,7 @@ export function LobbyView({ roomCode }: LobbyViewProps) {
     }
   };
 
-  const gpsOk = gpsStatus === "granted" || gpsStatus === "simulated";
+  const gpsOk = gpsStatus === "granted";
 
   const onStart = async () => {
     if (!playerId || !snapshot) return;
@@ -180,7 +180,7 @@ export function LobbyView({ roomCode }: LobbyViewProps) {
         </div>
         <div className="mt-1 flex justify-between">
           <span className="text-muted">GPS</span>
-          <span className={gpsStatus === "granted" || gpsStatus === "simulated" ? "text-safe" : "text-warn"}>
+          <span className={gpsOk ? "text-safe" : "text-warn"}>
             {gpsStatus}
           </span>
         </div>

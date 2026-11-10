@@ -50,7 +50,7 @@ export default function RoomPage() {
       setStep("need_name");
       return;
     }
-    if (gpsStatus !== "granted" && gpsStatus !== "simulated") {
+    if (gpsStatus !== "granted") {
       setStep("checking");
       return;
     }

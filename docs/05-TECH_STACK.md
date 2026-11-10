@@ -129,7 +129,7 @@ Host device
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | Prod | Supabase project |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Prod | Anon client |
-| `NEXT_PUBLIC_DEV_SIMULATE_GPS` | Dev | Enable WASD/click sim (`'true'` only) |
+| `?devsim=1` (runtime) | Dev | Enable devsim via localStorage (`outbreak_devsim`) |
 | `OVERPASS_URL` | Optional | Primary Overpass endpoint override |
 | `OVERPASS_MIRROR_URL` | Optional | Fallback endpoint |
 
