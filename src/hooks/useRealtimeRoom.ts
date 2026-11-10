@@ -1,0 +1,156 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
+import type { PlayerTelemetry, RoomSnapshot, WorldStateTick, GameActionEvent } from "@/types/game";
+import { useGameStore } from "@/store/useGameStore";
+
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const key =
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+function getClient(): SupabaseClient {
+  if (!url || !key) throw new Error("Missing Supabase env");
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+interface UseRealtimeRoomOpts {
+  roomCode: string;
+  playerId: string | null;
+  enabled: boolean;
+  roomId?: string | null;
+  onTick?: (tick: WorldStateTick) => void;
+  onAction?: (action: GameActionEvent) => void;
+  onLobby?: () => void;
+}
+
+export function useRealtimeRoom({
+  roomCode,
+  playerId,
+  enabled,
+  roomId,
+  onTick,
+  onAction,
+  onLobby,
+}: UseRealtimeRoomOpts) {
+  const [connected, setConnected] = useState(false);
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const sbRef = useRef<SupabaseClient | null>(null);
+  const lastSendRef = useRef(0);
+  const callbacks = useRef({ onTick, onAction, onLobby });
+  callbacks.current = { onTick, onAction, onLobby };
+  const roomIdRef = useRef(roomId);
+  roomIdRef.current = roomId;
+  const playerIdRef = useRef(playerId);
+  playerIdRef.current = playerId;
+
+  const sendTelemetry = useCallback((payload: PlayerTelemetry) => {
+    const now = Date.now();
+    if (now - lastSendRef.current < 1000) return false;
+    lastSendRef.current = now;
+    const ch = channelRef.current;
+    if (!ch) return false;
+    void ch.send({ type: "broadcast", event: "player_telemetry", payload });
+    return true;
+  }, []);
+
+  const sendHeartbeat = useCallback(() => {
+    const ch = channelRef.current;
+    if (!ch || !playerId) return;
+    void ch.send({
+      type: "broadcast",
+      event: "heartbeat",
+      payload: { player_id: playerId, timestamp: Date.now() },
+    });
+    const rid = roomIdRef.current;
+    if (rid) {
+      const { distanceM, maxSpeedMs } = useGameStore.getState();
+      void fetch("/api/rooms/heartbeat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          room_id: rid,
+          player_id: playerId,
+          distance_m: distanceM,
+          max_speed_ms: maxSpeedMs,
+        }),
+      }).catch(() => {});
+    }
+  }, [playerId]);
+
+  useEffect(() => {
+    if (!enabled || !roomCode || !playerId) {
+      setConnected(false);
+      return;
+    }
+    const sb = sbRef.current ?? getClient();
+    sbRef.current = sb;
+    const channel = sb.channel(`room:${roomCode}`, { config: { broadcast: { self: false } } });
+
+    channel
+      .on("broadcast", { event: "world_state_tick" }, ({ payload }) => {
+        callbacks.current.onTick?.(payload as WorldStateTick);
+      })
+      .on("broadcast", { event: "game_action" }, ({ payload }) => {
+        callbacks.current.onAction?.(payload as GameActionEvent);
+        if ((payload as GameActionEvent).action === "REMATCH") {
+          callbacks.current.onLobby?.();
+        }
+      })
+      .on("broadcast", { event: "lobby_state" }, () => {
+        callbacks.current.onLobby?.();
+      })
+      .subscribe((status) => {
+        setConnected(status === "SUBSCRIBED");
+      });
+
+    channelRef.current = channel;
+
+    const hb = window.setInterval(() => sendHeartbeat(), 5000);
+    return () => {
+      window.clearInterval(hb);
+      void sb.removeChannel(channel);
+      channelRef.current = null;
+      setConnected(false);
+    };
+  }, [enabled, roomCode, playerId, sendHeartbeat]);
+
+  const broadcastLobby = useCallback(() => {
+    const ch = channelRef.current;
+    if (!ch) return;
+    void ch.send({ type: "broadcast", event: "lobby_state", payload: { at: Date.now() } });
+  }, []);
+
+  const broadcastAction = useCallback((action: GameActionEvent) => {
+    const ch = channelRef.current;
+    if (!ch) return;
+    void ch.send({ type: "broadcast", event: "game_action", payload: action });
+  }, []);
+
+  const broadcastTick = useCallback((tick: WorldStateTick) => {
+    const ch = channelRef.current;
+    if (!ch) return;
+    void ch.send({ type: "broadcast", event: "world_state_tick", payload: tick });
+  }, []);
+
+  const sendWorldToWorker = useCallback((payload: unknown) => {
+    /* host wiring uses worker ref directly — kept for symmetry */
+    void payload;
+  }, []);
+
+  return {
+    connected,
+    sendTelemetry,
+    broadcastLobby,
+    broadcastAction,
+    broadcastTick,
+    sendWorldToWorker,
+  };
+}
+
+export async function fetchRoomSnapshot(code: string): Promise<RoomSnapshot | null> {
+  const res = await fetch(`/api/rooms/${code.toUpperCase()}`, { cache: "no-store" });
+  if (!res.ok) return null;
+  return (await res.json()) as RoomSnapshot;
+}

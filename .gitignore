@@ -1,0 +1,15 @@
+node_modules/
+.next/
+out/
+public/sw.js
+public/workbox-*.js
+public/worker-*.js
+public/swe-worker-*.js
+*.log
+.env*.local
+test-results/
+playwright-report/
+.DS_Store
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+supabase/.temp/

@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+  background: #0a0e0a;
+  color: #e8f5e8;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+button,
+[role="button"] {
+  min-height: 48px;
+  min-width: 48px;
+}
