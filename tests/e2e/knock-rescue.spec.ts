@@ -43,6 +43,10 @@ test("host create → guest join → start → knock → rescue → end → summ
 
   await expect(host.getByTestId("match-timer")).toBeVisible({ timeout: 20_000 });
   await expect(guest.getByTestId("match-timer")).toBeVisible({ timeout: 20_000 });
+  // worker ready (graph fetch burns up to 10s budget when Overpass unreachable)
+  await expect(host.locator("footer")).toContainText(/zombies[: ]+[1-9]\d*/i, {
+    timeout: 30_000,
+  });
 
   // host force-knocks self via dev hook (DevSim build)
   await host.evaluate(() => {

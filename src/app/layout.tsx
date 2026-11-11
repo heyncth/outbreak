@@ -4,10 +4,8 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "OUTBREAK",
   description: "GPS zombie survival co-op",
-  manifest: "/manifest.webmanifest",
   icons: {
     icon: "/icons/icon-192.png",
-    apple: "/icons/icon-512.png",
   },
   openGraph: {
     title: "OUTBREAK",

@@ -1,4 +1,5 @@
 import { haversineM, toRadians } from "@/lib/geoUtils";
+import { dbg } from "@/lib/debug";
 import type { LatLng } from "@/types/game";
 
 export type PathfindingMode = "GRAPH_ASTAR" | "DIRECT_VECTOR_FALLBACK";
@@ -35,6 +36,8 @@ export const GRID_SIZE_M = 100;
 const DEFAULT_ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ];
 
 const HIGHWAY_RE =
@@ -251,10 +254,12 @@ export async function loadRoadGraph(center: LatLng): Promise<GraphResult> {
         writeCache(center.lat, center.lng, result);
         return result;
       }
-    } catch {
-      /* try next mirror */
+      dbg("overpass empty", endpoint);
+    } catch (e) {
+      dbg("overpass fail", endpoint, e instanceof Error ? e.message : String(e));
     }
   }
 
+  dbg("overpass exhausted — falling back to DIRECT_VECTOR", { budget_ms: GRAPH_TOTAL_BUDGET_MS });
   return { graph: null, mode: "DIRECT_VECTOR_FALLBACK", build_ms: Date.now() - t0 };
 }

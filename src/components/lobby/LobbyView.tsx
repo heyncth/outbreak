@@ -11,6 +11,7 @@ import { useGameStore } from "@/store/useGameStore";
 import { GameMap } from "@/components/map/GameMap";
 import { MatchSummary } from "@/components/summary/MatchSummary";
 import { loadLastSummary } from "@/lib/lastSummary";
+import { dbg } from "@/lib/debug";
 import type { RoomSnapshot } from "@/types/game";
 
 interface LobbyViewProps {
@@ -72,6 +73,17 @@ export function LobbyView({ roomCode }: LobbyViewProps) {
   useEffect(() => {
     if (reading) setSelfPos({ lat: reading.lat, lng: reading.lng });
   }, [reading, setSelfPos]);
+
+  useEffect(() => {
+    dbg("lobby gate", {
+      phase,
+      gpsStatus,
+      isHost,
+      count: snapshot?.player_count ?? 0,
+      starting,
+      connected,
+    });
+  }, [phase, gpsStatus, isHost, snapshot, starting, connected]);
 
   const center = useMemo(() => {
     if (selfPos) return selfPos;

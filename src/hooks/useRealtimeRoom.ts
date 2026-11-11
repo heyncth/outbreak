@@ -10,9 +10,14 @@ const key =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+let cachedClient: SupabaseClient | null = null;
+
 function getClient(): SupabaseClient {
   if (!url || !key) throw new Error("Missing Supabase env");
-  return createClient(url, key, { auth: { persistSession: false } });
+  if (!cachedClient) {
+    cachedClient = createClient(url, key, { auth: { persistSession: false } });
+  }
+  return cachedClient;
 }
 
 interface UseRealtimeRoomOpts {

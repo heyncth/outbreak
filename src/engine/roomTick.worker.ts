@@ -20,6 +20,7 @@ import {
   zoneHeal,
 } from "@/engine/survivalRules";
 import { restoreFromTick } from "@/engine/workerRestore";
+import { dbg } from "@/lib/debug";
 import type {
   EndReason,
   PlayerState,
@@ -604,6 +605,9 @@ function tick(): void {
   };
 
   const ms = performance.now() - t0;
+  if (tickId % 10 === 1) {
+    dbg("worker tick", tickId, `t+${elapsed}s`, `${ms.toFixed(1)}ms`, `zombies=${payload.zombies.length}`);
+  }
   if (ms > TICK_BUDGET_MS) {
     postMessage({ type: "slow_tick", ms } satisfies WorkerOut);
   }
@@ -620,6 +624,12 @@ function stop(): void {
 self.onmessage = (ev: MessageEvent<WorkerIn>) => {
   const msg = ev.data;
   if (msg.type === "init") {
+    dbg("worker init", {
+      players: msg.players.length,
+      mode: msg.mode,
+      nodes: msg.graph?.nodes.size ?? 0,
+      restore: Boolean(msg.restoreTick),
+    });
     stop();
     graph = msg.graph;
     mode = msg.mode;

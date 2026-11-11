@@ -6,6 +6,7 @@ import { LobbyView } from "@/components/lobby/LobbyView";
 import { useGPS } from "@/hooks/useGPS";
 import { useGameStore } from "@/store/useGameStore";
 import { readSession } from "@/lib/session";
+import { dbg } from "@/lib/debug";
 
 type Step = "checking" | "need_name" | "joining" | "ready" | "error";
 
@@ -89,6 +90,10 @@ export default function RoomPage() {
       }
     })();
   }, [playerId, nickname, gpsStatus, reading, roomCode, step, joining]);
+
+  useEffect(() => {
+    dbg("room step", step, joinError ?? undefined);
+  }, [step, joinError]);
 
   if (step === "checking" || step === "joining") {
     return (

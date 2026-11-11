@@ -16,7 +16,13 @@ let cachedServer: SupabaseClient | null = null;
 export function serverClient(): SupabaseClient {
   if (!secret) throw new Error("Missing SUPABASE_SECRET_KEY");
   if (!cachedServer) {
-    cachedServer = createClient(url, secret, { auth: { persistSession: false } });
+    cachedServer = createClient(url, secret, {
+      auth: { persistSession: false },
+      // Next patches server fetch into its data cache — stale reads (WAITING after ACTIVE)
+      global: {
+        fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
+      },
+    });
   }
   return cachedServer;
 }

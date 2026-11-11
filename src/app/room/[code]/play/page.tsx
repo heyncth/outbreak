@@ -18,6 +18,7 @@ import {
 } from "@/lib/matchProgress";
 import { isDevSim } from "@/lib/devSim";
 import { readSession } from "@/lib/session";
+import { dbg } from "@/lib/debug";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import type { PlayerWorld, WorkerIn, WorkerOut, Density } from "@/engine/roomTick.worker";
 import type {
@@ -103,6 +104,12 @@ export default function PlayPage() {
       }
     }
     void fetchRoomSnapshot(roomCode).then((snap) => {
+      dbg("play snapshot", snap ? {
+        status: snap.status,
+        isHost: snap.host_player_id === useGameStore.getState().playerId,
+        center: [snap.center_lng, snap.center_lat],
+        players: snap.players.length,
+      } : "null");
       setSnapshot(snap);
       if (!snap) setStatus("Room not found");
       else {
@@ -196,6 +203,7 @@ export default function PlayPage() {
 
   const onTick = useCallback(
     (tick: WorldStateTick) => {
+      if (tick.tick_id % 10 === 1) dbg("client onTick", tick.tick_id, `t+${tick.elapsed_sec}s`);
       lastTickAtRef.current = Date.now();
       setWorldTick(tick);
       persistProgress(tick);
@@ -428,9 +436,14 @@ export default function PlayPage() {
         lat: snapshot.center_lat ?? reading?.lat ?? 16.054407,
         lng: snapshot.center_lng ?? reading?.lng ?? 108.202167,
       };
+      dbg("host: loading graph at", center);
       const graphResult = await loadRoadGraph(center);
       if (cancelled) return;
       const mode: PathfindingMode = graphResult.mode;
+      dbg("host: graph done", {
+        mode,
+        nodes: graphResult.graph?.nodes.size ?? 0,
+      });
       setPathfinding(
         mode,
         mode === "DIRECT_VECTOR_FALLBACK"
@@ -442,11 +455,17 @@ export default function PlayPage() {
         type: "module",
       });
       workerRef.current = worker;
+      dbg("host: worker created");
+      worker.onerror = (e) => dbg("host: worker ERROR", e.message ?? e);
       worker.onmessage = (ev: MessageEvent<WorkerOut>) => {
         const msg = ev.data;
         if (msg.type === "ready") {
+          dbg("host: worker ready", { zombies: msg.zombieCount, mode: msg.mode });
           setStatus(`Zombies: ${msg.zombieCount} (${msg.mode})`);
         } else if (msg.type === "tick") {
+          if (msg.payload.tick_id % 10 === 1) {
+            dbg("host: tick", msg.payload.tick_id, `t+${msg.payload.elapsed_sec}s`, `zombies=${msg.payload.zombies.length}`);
+          }
           for (const p of msg.payload.players) {
             const w = playersRef.current.get(p.player_id);
             if (w) {
@@ -704,8 +723,24 @@ export default function PlayPage() {
       forceKnock: (id) => {
         const pid = id ?? useGameStore.getState().playerId;
         if (!pid) return;
-        const p = playersRef.current.get(pid);
-        if (!p) return;
+        let p = playersRef.current.get(pid);
+        if (!p) {
+          // knock before snapshot seed — dev hook must not no-op
+          const snap = snapshotRef.current;
+          p = {
+            player_id: pid,
+            nickname: "dev",
+            state: "ALIVE",
+            hp: 100,
+            max_hp: 100,
+            lat: snap?.center_lat ?? 16.054407,
+            lng: snap?.center_lng ?? 108.202167,
+            noise: 0.05,
+            in_safe_zone: false,
+            knocked_remaining_sec: null,
+          };
+          playersRef.current.set(pid, p);
+        }
         p.state = "KNOCKED";
         p.hp = 0;
         p.knocked_remaining_sec = 60;

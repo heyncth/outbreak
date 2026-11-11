@@ -6,9 +6,9 @@ import { GameMap } from "@/components/map/GameMap";
 import { MatchSummary } from "@/components/summary/MatchSummary";
 import { useGPS } from "@/hooks/useGPS";
 import { useGameStore } from "@/store/useGameStore";
-import { loadLastSummary } from "@/lib/lastSummary";
+import { loadLastSummary, type LastSummary } from "@/lib/lastSummary";
 import { applyDevSimFromSearch } from "@/lib/devSim";
-import { loadMatchProgress, clearMatchProgress } from "@/lib/matchProgress";
+import { loadMatchProgress, clearMatchProgress, type MatchProgress } from "@/lib/matchProgress";
 import { readSession } from "@/lib/session";
 import type { GpsStatus } from "@/hooks/useGPS";
 
@@ -31,13 +31,16 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [gpsReady, setGpsReady] = useState(false);
   const [showLastSummary, setShowLastSummary] = useState(false);
-  const lastSummary = useMemo(() => loadLastSummary(), []);
-  const activeProgress = useMemo(() => loadMatchProgress(), []);
+  // null on SSR + first client render — localStorage fills after mount (hydration-safe)
+  const [lastSummary, setLastSummary] = useState<LastSummary | null>(null);
+  const [activeProgress, setActiveProgress] = useState<MatchProgress | null>(null);
 
   useEffect(() => {
     const s = readSession();
     setSession(s);
     setNickname(s.nickname);
+    setLastSummary(loadLastSummary());
+    setActiveProgress(loadMatchProgress());
     applyDevSimFromSearch();
     start();
     // eslint-disable-next-line react-hooks/exhaustive-deps

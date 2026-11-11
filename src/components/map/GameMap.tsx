@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { LatLng, ZombieTick, WorldStateTick } from "@/types/game";
+import { dbg } from "@/lib/debug";
 
 const STYLE_URL =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
@@ -172,8 +173,25 @@ export function GameMap({
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
     mapRef.current = map;
+    (window as unknown as { __map?: maplibregl.Map }).__map = map;
+    dbg("map constructed", {
+      center: [centerRef.current.lng, centerRef.current.lat],
+      zoom: 17,
+      container: containerRef.current.getBoundingClientRect(),
+    });
+    map.on("error", (e) => {
+      const err = (e as { error?: { message?: string } }).error;
+      dbg("map error", err?.message ?? e);
+    });
+    map.on("dataloading", (e) => dbg("map dataloading", (e as unknown as { dataType?: string }).dataType));
+    map.on("idle", () => dbg("map idle (all tiles settled)"));
 
     map.on("load", () => {
+      dbg("map load fired", {
+        canvas: Boolean(map.getCanvas()),
+        canvasSize: [map.getCanvas().width, map.getCanvas().height],
+        styleLoaded: map.isStyleLoaded(),
+      });
       const ringEl = document.createElement("div");
       ringEl.setAttribute("data-testid", "noise-ring");
       ringRef.current = new maplibregl.Marker({ element: ringEl })
@@ -317,5 +335,11 @@ export function GameMap({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  return <div ref={containerRef} className="absolute inset-0" data-testid="game-map" />;
+  // maplibregl-map CSS (position:relative; overflow:hidden) fights Tailwind
+  // absolute on the same node — sized outer, map container inner
+  return (
+    <div className="absolute inset-0">
+      <div ref={containerRef} className="h-full w-full" data-testid="game-map" />
+    </div>
+  );
 }
