@@ -327,7 +327,7 @@ export function GameMap({
     if (zsrc) zsrc.setData(zonesToFeatureCollection(worldTick?.safe_zones ?? []));
     const psrc = map.getSource(PLAYERS_GEOJSON) as maplibregl.GeoJSONSource | undefined;
     if (psrc) psrc.setData(playersToFeatureCollection(worldTick?.players ?? []));
-  }, [zombies, worldTick?.safe_zones, worldTick?.players]);
+  }, [zombies, worldTick?.tick_id, worldTick?.safe_zones, worldTick?.players]);
 
   useEffect(() => {
     const onResize = () => mapRef.current?.resize();
