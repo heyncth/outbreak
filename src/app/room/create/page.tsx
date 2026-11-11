@@ -40,6 +40,7 @@ export default function CreateRoomPage() {
           router.replace("/");
           return;
         }
+        useGameStore.getState().resetRoom();
         useGameStore.getState().setRoom({
           roomCode: data.room_code,
           isHost: true,

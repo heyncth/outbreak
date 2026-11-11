@@ -267,7 +267,7 @@ export function GameMap({
         type: "circle",
         source: ZONE_GEOJSON,
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 8, 18, 40],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 4, 15, 8, 16, 16, 17, 32, 18, 64],
           "circle-color": "rgba(16,185,129,0.2)",
           "circle-stroke-width": 2,
           "circle-stroke-color": "#10B981",
@@ -278,7 +278,7 @@ export function GameMap({
         type: "circle",
         source: ZONE_GEOJSON,
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 10, 18, 48],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 6, 15, 10, 16, 18, 17, 34, 18, 66],
           "circle-color": "rgba(16,185,129,0.05)",
           "circle-stroke-width": 3,
           "circle-stroke-color": "#10B981",

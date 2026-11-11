@@ -70,6 +70,7 @@ export default function RoomPage() {
           setStep("error");
           return;
         }
+        useGameStore.getState().resetRoom();
         useGameStore.getState().setSession({
           playerId,
           nickname: nickname.trim(),
