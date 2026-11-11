@@ -2,12 +2,15 @@
 
 import { create } from "zustand";
 import type { LatLng, MatchSummaryJson, PathfindingModeLike, WorldStateTick } from "@/types/game";
+import { readSession, writeSession } from "@/lib/session";
+import { haversineM } from "@/lib/geoUtils";
 
 interface GameState {
   roomCode: string | null;
   roomId: string | null;
   playerId: string | null;
   nickname: string | null;
+  joinToken: string | null;
   isHost: boolean;
   selfPos: LatLng | null;
   worldTick: WorldStateTick | null;
@@ -20,7 +23,7 @@ interface GameState {
   autoRespawns: number;
   matchSummary: MatchSummaryJson | null;
   matchEnded: boolean;
-  setSession: (p: { playerId: string; nickname: string }) => void;
+  setSession: (p: { playerId: string; nickname: string; joinToken?: string | null }) => void;
   setRoom: (p: { roomCode: string; isHost: boolean; roomId?: string | null }) => void;
   setSelfPos: (p: LatLng) => void;
   setWorldTick: (t: WorldStateTick | null) => void;
@@ -49,13 +52,23 @@ export const useGameStore = create<GameState>((set) => ({
   roomId: null,
   playerId: null,
   nickname: null,
+  joinToken: null,
   isHost: false,
   selfPos: null,
   worldTick: null,
   pathfindingMode: "GRAPH_ASTAR",
   graphNotice: null,
   ...emptyStats,
-  setSession: ({ playerId, nickname }) => set({ playerId, nickname }),
+  setSession: ({ playerId, nickname, joinToken }) =>
+    set((s) => {
+      const next = {
+        playerId,
+        nickname,
+        joinToken: joinToken !== undefined ? joinToken : s.joinToken,
+      };
+      writeSession(next);
+      return next;
+    }),
   setRoom: ({ roomCode, isHost, roomId }) =>
     set((s) => ({
       roomCode,
@@ -69,17 +82,13 @@ export const useGameStore = create<GameState>((set) => ({
   recordGps: (p, speedMs) =>
     set((s) => {
       const last = s.gpsTrack[s.gpsTrack.length - 1];
-      let dist = s.distanceM;
-      if (last) {
-        const dLat = ((p.lat - last.lat) * Math.PI * 6371000) / 180;
-        const dLng =
-          ((p.lng - last.lng) * Math.PI * 6371000 * Math.cos((p.lat * Math.PI) / 180)) / 180;
-        dist += Math.sqrt(dLat * dLat + dLng * dLng);
-      }
       const track =
         !last || Math.abs(p.lat - last.lat) + Math.abs(p.lng - last.lng) > 1e-6
           ? [...s.gpsTrack, p].slice(-2000)
           : s.gpsTrack;
+      // distance only when a point was actually stored (filter already deadbands)
+      const dist =
+        track !== s.gpsTrack && last ? s.distanceM + haversineM(last, p) : s.distanceM;
       return {
         gpsTrack: track,
         distanceM: dist,
@@ -95,6 +104,7 @@ export const useGameStore = create<GameState>((set) => ({
     set({
       roomCode: null,
       roomId: null,
+      joinToken: null,
       isHost: false,
       selfPos: null,
       worldTick: null,
@@ -103,3 +113,11 @@ export const useGameStore = create<GameState>((set) => ({
       ...emptyStats,
     }),
 }));
+
+// hydrate session once per page load (client)
+if (typeof window !== "undefined") {
+  const s = readSession();
+  if (!useGameStore.getState().playerId) {
+    useGameStore.getState().setSession(s);
+  }
+}

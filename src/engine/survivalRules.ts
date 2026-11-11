@@ -12,22 +12,10 @@ export const ZONE_TTL_SEC = 180;
 export const ZONE_COOLDOWN_MS = 10 * 60 * 1000;
 export const MELEE_RANGE_M = 3.5;
 
-export function knockRemainingSec(knockedAtMs: number, nowMs: number): number {
-  return Math.max(0, KNOCK_SEC - (nowMs - knockedAtMs) / 1000);
-}
-
 /** 60s timeout: permanent −20 max HP, floor 20; HP restored to new max. */
 export function onKnockTimeout(maxHp: number): { maxHp: number; hp: number } {
   const next = Math.max(MAX_HP_FLOOR, maxHp - MAX_HP_PENALTY);
   return { maxHp: next, hp: next };
-}
-
-export function canRescue(
-  distM: number,
-  rescuerState: PlayerState,
-  victimState: PlayerState
-): boolean {
-  return rescuerState === "ALIVE" && victimState === "KNOCKED" && distM <= RESCUE_DIST_M;
 }
 
 /** All connected (non-DISCONNECTED) players KNOCKED and none ALIVE → end. */
@@ -47,18 +35,6 @@ export function shouldEndSolo(
   return playerCount === 1 && selfState === "KNOCKED";
 }
 
-export function inZone(distM: number, radiusM: number): boolean {
-  return distM <= radiusM;
-}
-
 export function zoneHeal(hp: number, maxHp: number, dtSec: number): number {
   return Math.min(maxHp, hp + ZONE_HEAL_PER_S * dtSec);
-}
-
-export function hostZoneCooldownOk(
-  lastHostZoneMs: number | null,
-  nowMs: number
-): boolean {
-  if (lastHostZoneMs == null) return true;
-  return nowMs - lastHostZoneMs >= ZONE_COOLDOWN_MS;
 }

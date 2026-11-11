@@ -28,6 +28,7 @@ export function MatchSummary({ roomCode, roomId, summary, endReason, track }: Ma
   const router = useRouter();
   const isHost = useGameStore((s) => s.isHost);
   const playerId = useGameStore((s) => s.playerId);
+  const joinToken = useGameStore((s) => s.joinToken);
   const nickname = useGameStore((s) => s.nickname) ?? "Survivor";
   const [photo, setPhoto] = useState<HTMLImageElement | null>(null);
   const [shareState, setShareState] = useState<string | null>(null);
@@ -92,7 +93,7 @@ export function MatchSummary({ roomCode, roomId, summary, endReason, track }: Ma
       const res = await fetch("/api/rooms/rematch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ room_id: roomId, requester_player_id: playerId }),
+        body: JSON.stringify({ room_id: roomId, requester_player_id: playerId, join_token: joinToken }),
       });
       const data = await res.json();
       if (!res.ok) {

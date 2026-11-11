@@ -86,11 +86,20 @@ export async function POST(req: NextRequest) {
 
   await broadcastLobby(room_code);
 
+  const { data: tok, error: tokErr } = await sb
+    .from("room_players")
+    .select("join_token")
+    .eq("room_id", room.id)
+    .eq("player_id", player_id)
+    .maybeSingle();
+  if (tokErr) return apiError("DB_UNAVAILABLE", dbMessage(tokErr));
+
   return apiOk({
     room_id: room.id,
     player_id,
     is_host: isHost,
     status,
     rejoined,
+    join_token: tok?.join_token ?? null,
   });
 }

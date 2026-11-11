@@ -5,6 +5,7 @@ import {
   dbMessage,
   isValidUuid,
   rateLimit,
+  requireJoinToken,
 } from "@/lib/api";
 import { broadcastAction, broadcastLobby } from "@/lib/broadcast";
 import { serverClient } from "@/lib/supabase";
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return apiError("VALIDATION_ERROR", "Invalid JSON body");
   }
-  const { room_id, requester_player_id } = (body ?? {}) as Record<string, unknown>;
+  const { room_id, requester_player_id, join_token } = (body ?? {}) as Record<string, unknown>;
   if (!isValidUuid(room_id)) return apiError("VALIDATION_ERROR", "Invalid room_id");
   if (!isValidUuid(requester_player_id)) {
     return apiError("VALIDATION_ERROR", "Invalid requester_player_id");
@@ -26,6 +27,9 @@ export async function POST(req: NextRequest) {
   }
 
   const sb = serverClient();
+  if (!(await requireJoinToken(sb, room_id, requester_player_id, join_token))) {
+    return apiError("FORBIDDEN", "Invalid join token");
+  }
 
   const { data: room, error: roomErr } = await sb
     .from("game_rooms")

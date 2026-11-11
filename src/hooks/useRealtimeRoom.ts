@@ -65,13 +65,14 @@ export function useRealtimeRoom({
     });
     const rid = roomIdRef.current;
     if (rid) {
-      const { distanceM, maxSpeedMs } = useGameStore.getState();
+      const { distanceM, maxSpeedMs, joinToken } = useGameStore.getState();
       void fetch("/api/rooms/heartbeat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           room_id: rid,
           player_id: playerId,
+          join_token: joinToken,
           distance_m: distanceM,
           max_speed_ms: maxSpeedMs,
         }),
@@ -134,18 +135,12 @@ export function useRealtimeRoom({
     void ch.send({ type: "broadcast", event: "world_state_tick", payload: tick });
   }, []);
 
-  const sendWorldToWorker = useCallback((payload: unknown) => {
-    /* host wiring uses worker ref directly — kept for symmetry */
-    void payload;
-  }, []);
-
   return {
     connected,
     sendTelemetry,
     broadcastLobby,
     broadcastAction,
     broadcastTick,
-    sendWorldToWorker,
   };
 }
 

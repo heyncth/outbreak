@@ -1,5 +1,12 @@
 import { NextRequest } from "next/server";
-import { apiError, apiOk, dbMessage, isValidUuid, rateLimit } from "@/lib/api";
+import {
+  apiError,
+  apiOk,
+  dbMessage,
+  isValidUuid,
+  rateLimit,
+  requireJoinToken,
+} from "@/lib/api";
 import { serverClient } from "@/lib/supabase";
 
 function isValidLatLng(v: unknown): v is number {
@@ -13,14 +20,25 @@ export async function POST(req: NextRequest) {
   } catch {
     return apiError("VALIDATION_ERROR", "Invalid JSON body");
   }
-  const { rescuer_id, victim_id, rescuer_lat, rescuer_lng, victim_lat, victim_lng } = (
-    body ?? {}
-  ) as Record<string, unknown>;
+  const {
+    room_id,
+    rescuer_id,
+    victim_id,
+    join_token,
+    rescuer_lat,
+    rescuer_lng,
+    victim_lat,
+    victim_lng,
+  } = (body ?? {}) as Record<string, unknown>;
+  if (!isValidUuid(room_id)) return apiError("VALIDATION_ERROR", "Invalid room_id");
   if (!isValidUuid(rescuer_id)) return apiError("VALIDATION_ERROR", "Invalid rescuer_id");
   if (!isValidUuid(victim_id)) return apiError("VALIDATION_ERROR", "Invalid victim_id");
   if (!rateLimit(`rescue:${rescuer_id}`, 5)) return apiError("RATE_LIMITED", "Too many rescue attempts");
 
   const sb = serverClient();
+  if (!(await requireJoinToken(sb, room_id, rescuer_id, join_token))) {
+    return apiError("FORBIDDEN", "Invalid join token");
+  }
 
   // refresh locations from live tick coords so RPC distance check is real
   if (
@@ -45,14 +63,16 @@ export async function POST(req: NextRequest) {
           location: `POINT(${rescuer_lng} ${rescuer_lat})`,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", rescuer_id);
+        .eq("room_id", room_id)
+        .eq("player_id", rescuer_id);
       await sb
         .from("room_players")
         .update({
           location: `POINT(${victim_lng} ${victim_lat})`,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", victim_id);
+        .eq("room_id", room_id)
+        .eq("player_id", victim_id);
     }
   }
 
@@ -73,7 +93,8 @@ export async function POST(req: NextRequest) {
     const { data: victim } = await sb
       .from("room_players")
       .select("hp, state")
-      .eq("id", victim_id)
+      .eq("room_id", room_id)
+      .eq("player_id", victim_id)
       .maybeSingle();
     return apiOk({
       rescued: true,

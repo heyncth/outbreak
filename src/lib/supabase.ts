@@ -11,11 +11,12 @@ if (!url || !publishable) {
   throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or publishable key");
 }
 
-export function browserClient(): SupabaseClient {
-  return createClient(url, publishable, { auth: { persistSession: false } });
-}
+let cachedServer: SupabaseClient | null = null;
 
 export function serverClient(): SupabaseClient {
   if (!secret) throw new Error("Missing SUPABASE_SECRET_KEY");
-  return createClient(url, secret, { auth: { persistSession: false } });
+  if (!cachedServer) {
+    cachedServer = createClient(url, secret, { auth: { persistSession: false } });
+  }
+  return cachedServer;
 }

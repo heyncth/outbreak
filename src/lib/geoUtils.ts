@@ -78,13 +78,9 @@ export function filterGps(
 
   const point: LatLng = { lat: raw.lat, lng: raw.lng };
 
-  if (state.lastAccepted) {
-    const delta = haversineM(state.lastAccepted, point);
-    if (delta < GPS_MIN_DISPLACEMENT_M && raw.timestamp - state.acceptedAtMs < 1000) {
-      if (raw.timestamp - state.acceptedAtMs < 1000) {
-        return { accept: false, sample: null, flags };
-      }
-    }
+  // deadband: ignore moves < 2.5 m from last accepted point (standing GPS jitter)
+  if (state.lastAccepted && haversineM(state.lastAccepted, point) < GPS_MIN_DISPLACEMENT_M) {
+    return { accept: false, sample: null, flags };
   }
 
   if (raw.timestamp - state.acceptedAtMs < 1000) {

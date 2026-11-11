@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { WorldStateTick } from "@/types/game";
 import { RESCUE_HOLD_MS } from "@/engine/survivalRules";
+import { haversineM } from "@/lib/geoUtils";
 
 interface SurvivalHUDProps {
   tick: WorldStateTick | null;
@@ -54,10 +55,7 @@ export function SurvivalHUD({
     for (const p of tick.players) {
       if (p.player_id === playerId || p.state !== "KNOCKED") continue;
       if (p.knocked_remaining_sec == null || p.knocked_remaining_sec <= 0) continue;
-      const dLat = ((p.lat - self.lat) * Math.PI * 6371000) / 180;
-      const dLng =
-        ((p.lng - self.lng) * Math.PI * 6371000 * Math.cos((self.lat * Math.PI) / 180)) / 180;
-      const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+      const dist = haversineM({ lat: self.lat, lng: self.lng }, { lat: p.lat, lng: p.lng });
       if (dist <= 10 && (!best || dist < best.dist)) {
         best = { id: p.player_id, dist, remaining: p.knocked_remaining_sec };
       }
@@ -87,11 +85,11 @@ export function SurvivalHUD({
         const me = tick.players.find((p) => p.player_id === playerId);
         const victim = tick.players.find((p) => p.player_id === rescueTarget.id);
         if (me && victim) {
-          const dLat = ((victim.lat - me.lat) * Math.PI * 6371000) / 180;
-          const dLng =
-            ((victim.lng - me.lng) * Math.PI * 6371000 * Math.cos((me.lat * Math.PI) / 180)) /
-            180;
-          if (Math.sqrt(dLat * dLat + dLng * dLng) > 10) {
+          const d = haversineM(
+            { lat: me.lat, lng: me.lng },
+            { lat: victim.lat, lng: victim.lng }
+          );
+          if (d > 10) {
             stopHold(false);
             return;
           }

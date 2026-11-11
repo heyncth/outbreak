@@ -17,6 +17,8 @@ import {
   clearMatchProgress,
 } from "@/lib/matchProgress";
 import { isDevSim } from "@/lib/devSim";
+import { readSession } from "@/lib/session";
+import { useWakeLock } from "@/hooks/useWakeLock";
 import type { PlayerWorld, WorkerIn, WorkerOut, Density } from "@/engine/roomTick.worker";
 import type {
   EndReason,
@@ -28,20 +30,6 @@ import type {
 } from "@/types/game";
 
 const DENSITY: Density = "MEDIUM";
-
-function loadSession(): { playerId: string; nickname: string } {
-  const raw = localStorage.getItem("outbreak_player_session");
-  if (!raw) return { playerId: crypto.randomUUID(), nickname: "" };
-  const parsed = JSON.parse(raw) as {
-    player_id?: string;
-    playerId?: string;
-    nickname?: string;
-  };
-  return {
-    playerId: parsed.player_id ?? parsed.playerId ?? crypto.randomUUID(),
-    nickname: parsed.nickname ?? "",
-  };
-}
 
 export default function PlayPage() {
   const params = useParams<{ code: string }>();
@@ -68,6 +56,8 @@ export default function PlayPage() {
   const maxSpeedMs = useGameStore((s) => s.maxSpeedMs);
   const knockdowns = useGameStore((s) => s.knockdowns);
   const autoRespawns = useGameStore((s) => s.autoRespawns);
+  const joinToken = useGameStore((s) => s.joinToken);
+  const setSession = useGameStore((s) => s.setSession);
   const { status: gpsStatus, reading, start } = useGPS();
 
   const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null);
@@ -81,7 +71,6 @@ export default function PlayPage() {
   const broadcastActionRef = useRef<
     ((a: import("@/types/game").GameActionEvent) => void) | null
   >(null);
-  const session = useRef(loadSession());
   const endingRef = useRef(false);
   const endReasonRef = useRef<EndReason>("HOST_ENDED");
   const lastTickAtRef = useRef(0);
@@ -93,6 +82,8 @@ export default function PlayPage() {
   playerIdRef.current = playerId;
   const isHostRef = useRef(isHost);
   isHostRef.current = isHost;
+
+  useWakeLock(!matchEnded && gpsStatus === "granted");
 
   useEffect(() => {
     void start();
@@ -139,6 +130,42 @@ export default function PlayPage() {
       }
     });
   }, [roomCode, start, setMatchEnded, setWorldTick]);
+
+  // ensure join_token once (resume flow skips room page) — idempotent rejoin
+  useEffect(() => {
+    if (!playerId || joinToken) return;
+    const s = useGameStore.getState();
+    const lat = reading?.lat ?? 16.054407;
+    const lng = reading?.lng ?? 108.202167;
+    void fetch("/api/rooms/join", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        room_code: roomCode,
+        nickname: s.nickname?.trim() || readSession().nickname || "Survivor",
+        player_id: playerId,
+        lat,
+        lng,
+      }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.join_token) {
+          setSession({
+            playerId,
+            nickname: s.nickname || readSession().nickname || "Survivor",
+            joinToken: d.join_token,
+          });
+          useGameStore.getState().setRoom({
+            roomCode,
+            isHost: Boolean(d.is_host),
+            roomId: d.room_id ?? null,
+          });
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerId, joinToken, roomCode, setSession]);
 
   useEffect(() => {
     if (reading) {
@@ -215,6 +242,7 @@ export default function PlayPage() {
           body: JSON.stringify({
             room_id: rid,
             requester_player_id: playerId,
+            join_token: useGameStore.getState().joinToken,
             reason,
             knockdowns: useGameStore.getState().knockdowns,
             auto_respawns: useGameStore.getState().autoRespawns,
@@ -263,6 +291,7 @@ export default function PlayPage() {
           body: JSON.stringify({
             room_id: rid,
             requester_player_id: hostId,
+            join_token: useGameStore.getState().joinToken,
             target_player_id: targetId,
             state,
             ...extra,
@@ -512,6 +541,7 @@ export default function PlayPage() {
         body: JSON.stringify({
           room_id: rid,
           requester_player_id: playerId,
+          join_token: joinToken,
           lat: pos.lat,
           lng: pos.lng,
         }),
@@ -527,7 +557,7 @@ export default function PlayPage() {
     } catch {
       setStatus("Zone failed");
     }
-  }, [snapshot, selfPos, worldTick, playerId]);
+  }, [snapshot, selfPos, worldTick, playerId, joinToken]);
 
   const onRescue = useCallback(
     async (victimId: string) => {
@@ -541,8 +571,10 @@ export default function PlayPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            room_id: snapshot?.room_id ?? useGameStore.getState().roomId,
             rescuer_id: playerId,
             victim_id: victimId,
+            join_token: useGameStore.getState().joinToken,
             rescuer_lat: me.lat,
             rescuer_lng: me.lng,
             victim_lat: victim.lat,
@@ -580,7 +612,7 @@ export default function PlayPage() {
         setRescuePending(false);
       }
     },
-    [playerId, worldTick, rescuePending, isHost]
+    [playerId, worldTick, rescuePending, isHost, snapshot?.room_id]
   );
 
   const onEndMatch = useCallback(() => {
@@ -607,7 +639,7 @@ export default function PlayPage() {
 
   // non-host: host silent > 15s → request migration
   useEffect(() => {
-    if (isHost || matchEnded || !snapshot?.room_id || !playerId) return;
+    if (isHost || matchEnded || !snapshot?.room_id || !playerId || !joinToken) return;
     const id = window.setInterval(() => {
       const last = lastTickAtRef.current;
       if (!last || Date.now() - last <= HOST_MIGRATE_MS) return;
@@ -618,11 +650,49 @@ export default function PlayPage() {
         body: JSON.stringify({
           room_id: snapshot.room_id,
           requester_player_id: playerId,
+          join_token: joinToken,
         }),
       }).catch(() => {});
     }, 5000);
     return () => window.clearInterval(id);
-  }, [isHost, matchEnded, snapshot?.room_id, playerId]);
+  }, [isHost, matchEnded, snapshot?.room_id, playerId, joinToken]);
+
+  // host: sweep silent players → DISCONNECTED so ghosts stop + end conditions work
+  useEffect(() => {
+    if (!isHost || matchEnded || !snapshot?.room_id || !playerId || !joinToken) return;
+    const id = window.setInterval(() => {
+      void fetch("/api/rooms/sweep", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          room_id: snapshot.room_id,
+          requester_player_id: playerId,
+          join_token: joinToken,
+        }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          const ids: string[] = d?.disconnected ?? [];
+          if (!ids.length) return;
+          let changed = false;
+          for (const gone of ids) {
+            const w = playersRef.current.get(gone);
+            if (w && w.state !== "DISCONNECTED") {
+              w.state = "DISCONNECTED";
+              changed = true;
+            }
+          }
+          if (changed) {
+            workerRef.current?.postMessage({
+              type: "players",
+              players: [...playersRef.current.values()],
+            } satisfies WorkerIn);
+          }
+        })
+        .catch(() => {});
+    }, 10_000);
+    return () => window.clearInterval(id);
+  }, [isHost, matchEnded, snapshot?.room_id, playerId, joinToken]);
 
   // dev-only force knock for e2e
   useEffect(() => {

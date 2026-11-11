@@ -21,6 +21,13 @@ type ZombieShape = (typeof ZOMBIE_TYPES)[number];
 
 const ZOMBIE_GEOJSON = "zombies-src";
 const ZONE_GEOJSON = "zones-src";
+const PLAYERS_GEOJSON = "players-src";
+
+const PLAYER_COLORS: Record<string, string> = {
+  ALIVE: "#06B6D4",
+  KNOCKED: "#F97316",
+  DISCONNECTED: "#64748B",
+};
 
 function zombieIconImage(type: ZombieShape, color: string): HTMLCanvasElement {
   const size = 36;
@@ -116,6 +123,23 @@ function zonesToFeatureCollection(
   };
 }
 
+function playersToFeatureCollection(
+  players: WorldStateTick["players"]
+): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: players.map((p) => ({
+      type: "Feature",
+      properties: {
+        id: p.player_id,
+        state: p.state,
+        color: PLAYER_COLORS[p.state] ?? "#06B6D4",
+      },
+      geometry: { type: "Point", coordinates: [p.lng, p.lat] },
+    })),
+  };
+}
+
 export function GameMap({
   center,
   selfPos,
@@ -134,6 +158,8 @@ export function GameMap({
   zombiesRef.current = zombies;
   const zonesRef = useRef(worldTick?.safe_zones ?? []);
   zonesRef.current = worldTick?.safe_zones ?? [];
+  const playersRef = useRef(worldTick?.players ?? []);
+  playersRef.current = worldTick?.players ?? [];
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -203,6 +229,21 @@ export function GameMap({
         type: "geojson",
         data: zonesToFeatureCollection(zonesRef.current),
       });
+      map.addSource(PLAYERS_GEOJSON, {
+        type: "geojson",
+        data: playersToFeatureCollection(playersRef.current),
+      });
+      map.addLayer({
+        id: "players-circle",
+        type: "circle",
+        source: PLAYERS_GEOJSON,
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 7, 18, 16],
+          "circle-color": ["get", "color"],
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#0a0e0a",
+        },
+      });
       map.addLayer({
         id: "safe-zone-fill",
         type: "circle",
@@ -252,7 +293,11 @@ export function GameMap({
       ringEl.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;border:2px solid rgba(255,209,102,0.5);background:rgba(255,209,102,0.08);transform:translate(-50%,-50%);margin-left:${-size / 2 + 8}px;margin-top:${-size / 2 + 8}px;pointer-events:none;`;
       ringRef.current.setLngLat(lngLat);
     }
-    mapRef.current.easeTo({ center: lngLat, duration: 500 });
+    // recenter only when self marker would leave the viewport — free pan otherwise
+    const map = mapRef.current;
+    if (map && !map.getBounds().contains(lngLat)) {
+      map.easeTo({ center: lngLat, duration: 500 });
+    }
   }, [selfPos, noise]);
 
   useEffect(() => {
@@ -262,7 +307,9 @@ export function GameMap({
     if (src) src.setData(toFeatureCollection(zombies));
     const zsrc = map.getSource(ZONE_GEOJSON) as maplibregl.GeoJSONSource | undefined;
     if (zsrc) zsrc.setData(zonesToFeatureCollection(worldTick?.safe_zones ?? []));
-  }, [zombies, worldTick?.safe_zones]);
+    const psrc = map.getSource(PLAYERS_GEOJSON) as maplibregl.GeoJSONSource | undefined;
+    if (psrc) psrc.setData(playersToFeatureCollection(worldTick?.players ?? []));
+  }, [zombies, worldTick?.safe_zones, worldTick?.players]);
 
   useEffect(() => {
     const onResize = () => mapRef.current?.resize();

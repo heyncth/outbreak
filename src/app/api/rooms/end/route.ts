@@ -5,16 +5,12 @@ import {
   dbMessage,
   isValidUuid,
   rateLimit,
+  requireJoinToken,
 } from "@/lib/api";
 import { broadcastAction, broadcastLobby } from "@/lib/broadcast";
 import { serverClient } from "@/lib/supabase";
-import type { EndReason, MatchSummaryJson, MatchPlayerStat } from "@/types/game";
-
-interface EndBodyExtra {
-  knockdowns?: number;
-  auto_respawns?: number;
-  pathfinding_mode?: string;
-}
+import { buildMatchSummary } from "@/lib/summary";
+import type { EndReason, MatchPlayerStat } from "@/types/game";
 
 export async function POST(req: NextRequest) {
   let body: unknown;
@@ -26,11 +22,12 @@ export async function POST(req: NextRequest) {
   const {
     room_id,
     requester_player_id,
+    join_token,
     reason,
     knockdowns,
     auto_respawns,
     pathfinding_mode,
-  } = (body ?? {}) as Record<string, unknown> & EndBodyExtra;
+  } = (body ?? {}) as Record<string, unknown>;
   if (!isValidUuid(room_id)) return apiError("VALIDATION_ERROR", "Invalid room_id");
   if (!isValidUuid(requester_player_id)) {
     return apiError("VALIDATION_ERROR", "Invalid requester_player_id");
@@ -43,6 +40,10 @@ export async function POST(req: NextRequest) {
 
   const sb = serverClient();
 
+  if (!(await requireJoinToken(sb, room_id, requester_player_id, join_token))) {
+    return apiError("FORBIDDEN", "Invalid join token");
+  }
+
   const { data: room, error: roomErr } = await sb
     .from("game_rooms")
     .select("id, status, host_player_id, room_code, started_at")
@@ -52,7 +53,8 @@ export async function POST(req: NextRequest) {
   if (roomErr) return apiError("DB_UNAVAILABLE", dbMessage(roomErr));
   if (!room) return apiError("ROOM_NOT_FOUND", "Room not found");
 
-  if (endReason === "HOST_ENDED" && room.host_player_id !== requester_player_id) {
+  const isHost = room.host_player_id === requester_player_id;
+  if (endReason === "HOST_ENDED" && !isHost) {
     return apiError("NOT_HOST", "Only the host can end the match");
   }
   if (room.status !== "ACTIVE") {
@@ -67,6 +69,15 @@ export async function POST(req: NextRequest) {
   if (pErr) return apiError("DB_UNAVAILABLE", dbMessage(pErr));
 
   const rows = players ?? [];
+  const connected = rows.filter((p) => p.state !== "DISCONNECTED");
+  if (
+    endReason === "ALL_KNOCKED" &&
+    !isHost &&
+    !(connected.length > 0 && connected.every((p) => p.state === "KNOCKED"))
+  ) {
+    return apiError("FORBIDDEN", "Not all players are knocked");
+  }
+
   const playerStats: MatchPlayerStat[] = rows.map((p) => ({
     player_id: p.player_id,
     nickname: p.nickname,
@@ -77,40 +88,24 @@ export async function POST(req: NextRequest) {
     state: p.state as MatchPlayerStat["state"],
   }));
 
-  const durationSec = room.started_at
-    ? Math.max(0, Math.floor((Date.now() - Date.parse(room.started_at)) / 1000))
-    : 0;
-
-  const summary: MatchSummaryJson = {
-    tech_metrics: {
-      pathfinding_mode:
-        pathfinding_mode === "DIRECT_VECTOR_FALLBACK" ||
-        pathfinding_mode === "GRAPH_ASTAR"
-          ? pathfinding_mode
-          : undefined,
+  // knock counts come from host worker — only the real host may supply them
+  const summary = buildMatchSummary(
+    { started_at: room.started_at },
+    playerStats,
+    {
+      knockdowns: isHost && typeof knockdowns === "number" ? knockdowns : 0,
+      autoRespawns: isHost && typeof auto_respawns === "number" ? auto_respawns : 0,
+      pathfinding_mode: typeof pathfinding_mode === "string" ? pathfinding_mode : undefined,
     },
-    gameplay_metrics: {
-      match_duration_sec: durationSec,
-      total_team_distance_m: playerStats.reduce((a, p) => a + p.distance_m, 0),
-      total_knockdowns: typeof knockdowns === "number" ? knockdowns : 0,
-      successful_rescues: playerStats.reduce((a, p) => a + p.rescues_count, 0),
-      auto_respawns_at_safezone: typeof auto_respawns === "number" ? auto_respawns : 0,
-      end_reason: endReason,
-    },
-    players: playerStats,
-  };
+    endReason
+  );
 
   const { error: endErr } = await sb.rpc("end_match", {
     p_room_id: room_id,
     p_reason: endReason,
+    p_summary: summary,
   });
   if (endErr) return apiError("DB_UNAVAILABLE", dbMessage(endErr));
-
-  const { error: sumErr } = await sb
-    .from("match_results")
-    .update({ summary_json: summary })
-    .eq("room_id", room_id);
-  if (sumErr) return apiError("DB_UNAVAILABLE", dbMessage(sumErr));
 
   const { data: after } = await sb
     .from("game_rooms")

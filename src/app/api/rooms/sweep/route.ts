@@ -1,9 +1,16 @@
 import { NextRequest } from "next/server";
-import { apiError, apiOk, dbMessage, isValidUuid, parseTs, rateLimit } from "@/lib/api";
+import {
+  apiError,
+  apiOk,
+  dbMessage,
+  isValidUuid,
+  rateLimit,
+  requireJoinToken,
+} from "@/lib/api";
 import { serverClient } from "@/lib/supabase";
-import { DISCONNECT_MS, GRACE_MS } from "@/engine/connectionGrace";
+import { DISCONNECT_MS } from "@/engine/connectionGrace";
 
-/** Mark players silent >10s DISCONNECTED; expire grace >90s for end-condition. */
+/** Mark players silent >10s DISCONNECTED; returns their ids for host worker sync. */
 export async function POST(req: NextRequest) {
   let body: unknown;
   try {
@@ -11,7 +18,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return apiError("VALIDATION_ERROR", "Invalid JSON body");
   }
-  const { room_id, requester_player_id } = (body ?? {}) as Record<string, unknown>;
+  const { room_id, requester_player_id, join_token } = (body ?? {}) as Record<string, unknown>;
   if (!isValidUuid(room_id)) return apiError("VALIDATION_ERROR", "Invalid room_id");
   if (!isValidUuid(requester_player_id)) {
     return apiError("VALIDATION_ERROR", "Invalid requester_player_id");
@@ -19,55 +26,31 @@ export async function POST(req: NextRequest) {
   if (!rateLimit(`sweep:${room_id}`, 30)) return apiError("RATE_LIMITED", "Sweep limited");
 
   const sb = serverClient();
+  if (!(await requireJoinToken(sb, room_id, requester_player_id, join_token))) {
+    return apiError("FORBIDDEN", "Invalid join token");
+  }
+
   const { data: room, error: roomErr } = await sb
     .from("game_rooms")
-    .select("id, status")
+    .select("id, status, host_player_id")
     .eq("id", room_id)
     .maybeSingle();
   if (roomErr) return apiError("DB_UNAVAILABLE", dbMessage(roomErr));
   if (!room) return apiError("ROOM_NOT_FOUND", "Room not found");
-  if (room.status !== "ACTIVE") return apiOk({ marked: 0, expired: 0 });
-
-  const now = Date.now();
-  const { data: players, error: pErr } = await sb
-    .from("room_players")
-    .select("id, player_id, state, last_seen_at, joined_at")
-    .eq("room_id", room_id);
-  if (pErr) return apiError("DB_UNAVAILABLE", dbMessage(pErr));
-
-  let marked = 0;
-  let expired = 0;
-
-  for (const p of players ?? []) {
-    if (p.state === "DISCONNECTED") continue;
-    const last = parseTs(p.last_seen_at) ?? now;
-    const silence = now - last;
-    if (silence > DISCONNECT_MS && silence <= DISCONNECT_MS + GRACE_MS) {
-      const { error } = await sb
-        .from("room_players")
-        .update({
-          state: "DISCONNECTED",
-          disconnected_at: new Date(last + DISCONNECT_MS).toISOString(),
-        })
-        .eq("id", p.id)
-        .eq("state", p.state);
-      if (!error) marked += 1;
-    }
+  if (room.host_player_id !== requester_player_id) {
+    return apiError("NOT_HOST", "Only the host can sweep");
   }
+  if (room.status !== "ACTIVE") return apiOk({ disconnected: [] });
 
-  const { data: discs, error: dErr } = await sb
+  const cutoff = new Date(Date.now() - DISCONNECT_MS).toISOString();
+  const { data, error } = await sb
     .from("room_players")
-    .select("id, disconnected_at")
+    .update({ state: "DISCONNECTED", disconnected_at: new Date().toISOString() })
     .eq("room_id", room_id)
-    .eq("state", "DISCONNECTED");
-  if (dErr) return apiError("DB_UNAVAILABLE", dbMessage(dErr));
+    .neq("state", "DISCONNECTED")
+    .lt("last_seen_at", cutoff)
+    .select("player_id");
+  if (error) return apiError("DB_UNAVAILABLE", dbMessage(error));
 
-  for (const p of discs ?? []) {
-    const discAt = parseTs(p.disconnected_at) ?? 0;
-    if (discAt && now - discAt > GRACE_MS) {
-      expired += 1;
-    }
-  }
-
-  return apiOk({ marked, expired });
+  return apiOk({ disconnected: (data ?? []).map((p) => p.player_id) });
 }

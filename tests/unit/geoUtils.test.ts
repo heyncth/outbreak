@@ -73,6 +73,13 @@ describe("filterGps 5 stages", () => {
     expect(r.accept).toBe(false);
   });
 
+  it("deadband rejects stationary readings even after 1s", () => {
+    const s = createGpsFilterState();
+    filterGps(s, { lat: DN.lat, lng: DN.lng, accuracy_m: 5, speed_ms: 0, timestamp: 9_000_000 });
+    const r = filterGps(s, { lat: DN.lat, lng: DN.lng, accuracy_m: 5, speed_ms: 0, timestamp: 9_010_000 });
+    expect(r.accept).toBe(false);
+  });
+
   it("EMA smooths speed", () => {
     const s = createGpsFilterState();
     filterGps(s, { lat: DN.lat, lng: DN.lng, accuracy_m: 5, speed_ms: 10, timestamp: 11_000_000 });

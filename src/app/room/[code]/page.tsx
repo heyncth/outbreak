@@ -5,18 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { LobbyView } from "@/components/lobby/LobbyView";
 import { useGPS } from "@/hooks/useGPS";
 import { useGameStore } from "@/store/useGameStore";
+import { readSession } from "@/lib/session";
 
 type Step = "checking" | "need_name" | "joining" | "ready" | "error";
-
-function ensurePlayerId(): string {
-  const key = "outbreak_player_session";
-  let raw = localStorage.getItem(key);
-  if (!raw) {
-    raw = JSON.stringify({ player_id: crypto.randomUUID(), nickname: "" });
-    localStorage.setItem(key, raw);
-  }
-  return (JSON.parse(raw) as { player_id: string }).player_id;
-}
 
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
@@ -33,10 +24,7 @@ export default function RoomPage() {
   const [joining, setJoining] = useState(false);
 
   useEffect(() => {
-    const id = ensurePlayerId();
-    if (!useGameStore.getState().playerId) {
-      setSession({ playerId: id, nickname: useGameStore.getState().nickname ?? "" });
-    }
+    setSession(readSession());
     void start();
   }, [setSession, start]);
 
@@ -54,7 +42,7 @@ export default function RoomPage() {
       setStep("checking");
       return;
     }
-    if (step === "ready" || step === "joining" || joining) return;
+    if (step === "ready" || step === "joining" || step === "error" || joining) return;
 
     const lat = reading?.lat ?? 16.054407;
     const lng = reading?.lng ?? 108.202167;
@@ -81,9 +69,15 @@ export default function RoomPage() {
           setStep("error");
           return;
         }
+        useGameStore.getState().setSession({
+          playerId,
+          nickname: nickname.trim(),
+          joinToken: data.join_token ?? null,
+        });
         useGameStore.getState().setRoom({
           roomCode,
           isHost: Boolean(data.is_host),
+          roomId: data.room_id ?? null,
         });
         setJoinError(null);
         setStep("ready");
@@ -140,7 +134,7 @@ export default function RoomPage() {
           data-testid="confirm-join"
           disabled={nameInput.trim().length < 2 || nameInput.trim().length > 30}
           onClick={() => {
-            setSession({ playerId: ensurePlayerId(), nickname: nameInput.trim() });
+            setSession({ ...readSession(), nickname: nameInput.trim() });
           }}
           className="rounded bg-safe px-4 py-3 font-bold text-bg disabled:opacity-40"
         >

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type ErrorCode =
   | "INVALID_NICKNAME"
@@ -56,7 +57,13 @@ const hits = new Map<string, { n: number; reset: number }>();
 
 export function rateLimit(key: string, limit: number, windowMs = 60_000): boolean {
   const now = Date.now();
+  if (hits.size > 1000) {
+    for (const [k, v] of hits) {
+      if (now > v.reset) hits.delete(k);
+    }
+  }
   const row = hits.get(key);
+  if (row && now > row.reset) hits.delete(key);
   if (!row || now > row.reset) {
     hits.set(key, { n: 1, reset: now + windowMs });
     return true;
@@ -64,6 +71,25 @@ export function rateLimit(key: string, limit: number, windowMs = 60_000): boolea
   if (row.n >= limit) return false;
   row.n += 1;
   return true;
+}
+
+/** Prove requester owns (room_id, player_id) via per-join secret. Fail closed. */
+export async function requireJoinToken(
+  sb: SupabaseClient,
+  roomId: string,
+  playerId: string,
+  token: unknown
+): Promise<boolean> {
+  if (!isValidUuid(roomId) || !isValidUuid(playerId)) return false;
+  if (typeof token !== "string" || !isValidUuid(token)) return false;
+  const { data, error } = await sb
+    .from("room_players")
+    .select("join_token")
+    .eq("room_id", roomId)
+    .eq("player_id", playerId)
+    .maybeSingle();
+  if (error || !data) return false;
+  return data.join_token === token;
 }
 
 export function isValidUuid(v: unknown): v is string {

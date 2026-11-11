@@ -22,6 +22,7 @@ export function LobbyView({ roomCode }: LobbyViewProps) {
   const playerId = useGameStore((s) => s.playerId);
   const nickname = useGameStore((s) => s.nickname);
   const isHost = useGameStore((s) => s.isHost);
+  const joinToken = useGameStore((s) => s.joinToken);
   const setRoom = useGameStore((s) => s.setRoom);
   const selfPos = useGameStore((s) => s.selfPos);
   const setSelfPos = useGameStore((s) => s.setSelfPos);
@@ -44,10 +45,7 @@ export function LobbyView({ roomCode }: LobbyViewProps) {
     setSnapshot(snap);
     setError(null);
     setPhase(snap.status === "ACTIVE" ? "active" : snap.status === "ENDED" ? "ended" : "lobby");
-    setRoom({ roomCode: snap.room_code, isHost: snap.host_player_id === playerId });
-    if (snap.host_player_id === playerId) {
-      useGameStore.getState().setRoom({ roomCode: snap.room_code, isHost: true });
-    }
+    setRoom({ roomCode: snap.room_code, isHost: snap.host_player_id === playerId, roomId: snap.room_id });
   }, [roomCode, playerId, setRoom]);
 
   const { connected, broadcastLobby } = useRealtimeRoom({
@@ -66,10 +64,10 @@ export function LobbyView({ roomCode }: LobbyViewProps) {
   }, [start, refresh]);
 
   useEffect(() => {
-    if (!snapshot || phase === "ended") return;
+    if (!snapshot || phase === "ended" || connected) return;
     const id = window.setInterval(() => void refresh(), 3_000);
     return () => window.clearInterval(id);
-  }, [snapshot, phase, refresh]);
+  }, [snapshot, phase, connected, refresh]);
 
   useEffect(() => {
     if (reading) setSelfPos({ lat: reading.lat, lng: reading.lng });
@@ -107,7 +105,7 @@ export function LobbyView({ roomCode }: LobbyViewProps) {
       const res = await fetch("/api/rooms/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ room_id: snapshot.room_id, requester_player_id: playerId }),
+        body: JSON.stringify({ room_id: snapshot.room_id, requester_player_id: playerId, join_token: joinToken }),
       });
       const data = await res.json();
       if (!res.ok) {

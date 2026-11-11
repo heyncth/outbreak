@@ -9,6 +9,7 @@ import { useGameStore } from "@/store/useGameStore";
 import { loadLastSummary } from "@/lib/lastSummary";
 import { applyDevSimFromSearch } from "@/lib/devSim";
 import { loadMatchProgress, clearMatchProgress } from "@/lib/matchProgress";
+import { readSession } from "@/lib/session";
 import type { GpsStatus } from "@/hooks/useGPS";
 
 const GPS_LABEL: Record<GpsStatus, string> = {
@@ -18,17 +19,6 @@ const GPS_LABEL: Record<GpsStatus, string> = {
   denied: "GPS: Denied",
   unavailable: "GPS: Unavailable",
 };
-
-function ensurePlayerId(): string {
-  const key = "outbreak_player_session";
-  let raw = localStorage.getItem(key);
-  if (!raw) {
-    const id = crypto.randomUUID();
-    raw = JSON.stringify({ player_id: id, nickname: "" });
-    localStorage.setItem(key, raw);
-  }
-  return (JSON.parse(raw) as { player_id: string }).player_id;
-}
 
 export default function HomePage() {
   const router = useRouter();
@@ -45,10 +35,12 @@ export default function HomePage() {
   const activeProgress = useMemo(() => loadMatchProgress(), []);
 
   useEffect(() => {
-    const playerId = ensurePlayerId();
-    setSession({ playerId, nickname: "" });
+    const s = readSession();
+    setSession(s);
+    setNickname(s.nickname);
     applyDevSimFromSearch();
     start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setSession, start]);
 
   useEffect(() => {
@@ -87,7 +79,7 @@ export default function HomePage() {
       setError("Nickname 2–30 chars + GPS required.");
       return;
     }
-    setSession({ playerId: ensurePlayerId(), nickname: nickname.trim() });
+    setSession({ ...readSession(), nickname: nickname.trim() });
     router.push("/room/create");
   };
 
@@ -101,7 +93,7 @@ export default function HomePage() {
       setError("Room code: 6 chars, A–Z and 2–9.");
       return;
     }
-    setSession({ playerId: ensurePlayerId(), nickname: nickname.trim() });
+    setSession({ ...readSession(), nickname: nickname.trim() });
     router.push(`/room/${code}`);
   };
 

@@ -77,7 +77,6 @@ export type WorkerIn =
     }
   | { type: "players"; players: PlayerWorld[] }
   | { type: "add_zone"; zone: SafeZoneTick }
-  | { type: "remove_zone"; zoneId: string }
   | { type: "apply_rescue"; rescuerId: string; victimId: string }
   | { type: "stop" };
 
@@ -659,8 +658,6 @@ self.onmessage = (ev: MessageEvent<WorkerIn>) => {
     if (!zones.some((z) => z.id === msg.zone.id)) {
       zones.push({ ...msg.zone });
     }
-  } else if (msg.type === "remove_zone") {
-    zones = zones.filter((z) => z.id !== msg.zoneId);
   } else if (msg.type === "apply_rescue") {
     const victim = players.find((p) => p.player_id === msg.victimId);
     if (victim && victim.state === "KNOCKED") {
