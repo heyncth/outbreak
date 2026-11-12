@@ -214,7 +214,7 @@ export function GameMap({
         WALKER: "/icons/walker.png",
         RUNNER: "/icons/runner.png",
         STALKER: "/icons/stalker.png",
-        SCREAMER: "/icons/screamer.png",
+        SCREAMER: "/icons/brute.png",
         BRUTE: "/icons/brute.png",
       };
       for (const t of ZOMBIE_TYPES) {
@@ -226,7 +226,7 @@ export function GameMap({
               const res = await map.loadImage(url);
               if (!map.hasImage(id)) map.addImage(id, res.data);
             } catch {
-              // image load failed; fall back to canvas icon
+              // image load failed; skip
             }
           }
         }
