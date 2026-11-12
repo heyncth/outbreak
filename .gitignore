@@ -15,3 +15,4 @@ tsconfig.tsbuildinfo
 *.tsbuildinfo
 supabase/.temp/
 screens/
+assets_raw/
