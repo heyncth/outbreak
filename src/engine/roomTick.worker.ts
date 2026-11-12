@@ -123,36 +123,31 @@ let ended = false;
 const knockedNotified = new Set<string>();
 const respawnNotified = new Set<string>();
 
+let lastWaveAt = 0;
+let waveCount = 0;
+
+function spawnCluster(lat: number, lng: number, count: number, typeOverride?: ZombieType): void {
+  for (let i = 0; i < count; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const r = 5 + Math.random() * 15;
+    const zLat = lat + (r * Math.cos(ang)) / 111_320;
+    const zLng = lng + (r * Math.sin(ang)) / (111_320 * Math.cos((lat * Math.PI) / 180));
+    const type = typeOverride ?? (ZOMBIE_TYPES[Math.floor(Math.random() * 3)] as ZombieType);
+    zombies.push(newZombie(`z_${Date.now()}_${i}`, type, zLat, zLng));
+  }
+}
+
 function spawnZombies(density: Density): void {
-  const count = DENSITY_COUNT[density];
   zombies = [];
-  if (!graph || graph.nodes.size === 0) {
-    // fallback: ring around center
-    for (let i = 0; i < count; i++) {
-      const ang = (i / count) * Math.PI * 2;
-      const r = 80 + (i % 3) * 20;
-      const lat = center.lat + (r * Math.cos(ang)) / 111_320;
-      const lng =
-        center.lng + (r * Math.sin(ang)) / (111_320 * Math.cos((center.lat * Math.PI) / 180));
-      const type = ZOMBIE_TYPES[i % ZOMBIE_TYPES.length] as ZombieType;
-      zombies.push(newZombie(`z_fb_${i}`, type, lat, lng));
-    }
-    return;
-  }
-  const candidates: string[] = [];
-  for (const n of graph.nodes.values()) {
-    const far = players.every((p) => haversineM(n, p) >= SPAWN_MIN_M);
-    if (far) candidates.push(n.id);
-  }
-  const pool = candidates.length > 0 ? candidates : [...graph.nodes.keys()];
-  for (let i = 0; i < count && pool.length > 0; i++) {
-    const idx = Math.floor(Math.random() * pool.length);
-    const nodeId = pool.splice(idx, 1)[0] as string;
-    const n = graph.nodes.get(nodeId);
-    if (!n) continue;
-    const type = ZOMBIE_TYPES[i % ZOMBIE_TYPES.length] as ZombieType;
-    zombies.push(newZombie(`z_${i}`, type, n.lat, n.lng));
-  }
+  lastWaveAt = Date.now();
+  waveCount = 0;
+  const p = players[0];
+  const baseLat = p ? p.lat : center.lat;
+  const baseLng = p ? p.lng : center.lng;
+  // spawn 3 in a cluster 80m ahead of player
+  const aheadLat = baseLat + (80 / 111_320);
+  const aheadLng = baseLng;
+  spawnCluster(aheadLat, aheadLng, 3, "WALKER");
 }
 
 function newZombie(id: string, type: ZombieType, lat: number, lng: number): ZombieWorld {
@@ -386,6 +381,21 @@ function tick(): void {
     if (z.expires_in_sec != null) z.expires_in_sec = Math.max(0, z.expires_in_sec - dt);
   }
   zones = zones.filter((z) => z.expires_in_sec == null || z.expires_in_sec > 0);
+
+  // despawn zombies far from all players
+  zombies = zombies.filter((z) => players.some((p) => haversineM(z, p) <= 400));
+  // wave spawn every 60s
+  if (now - lastWaveAt >= 60000 && players.length > 0) {
+    lastWaveAt = now;
+    waveCount++;
+    const p = players[0] as PlayerWorld;
+    const type: ZombieType =
+      waveCount <= 2 ? "WALKER" : waveCount <= 4 ? "RUNNER" : waveCount <= 6 ? "STALKER" : "SCREAMER";
+    const count = waveCount <= 2 ? 2 : 3;
+    const aheadLat = p.lat + (70 / 111_320);
+    const aheadLng = p.lng;
+    spawnCluster(aheadLat, aheadLng, count, type);
+  }
 
   // safe-zone flags, heal, knock timer / auto-respawn
   for (const p of players) {
