@@ -116,17 +116,12 @@ export function MatchSummary({ roomCode, roomId, summary, endReason, track }: Ma
       className="mx-auto flex min-h-[100dvh] max-w-md flex-col gap-4 p-4"
       data-testid="match-summary"
     >
-      <header
-        className="relative overflow-hidden rounded border-b border-line bg-cover bg-center pb-2"
-        style={{ backgroundImage: "url('/brand/banner-169.webp')" }}
-      >
-        <div className="bg-bg/70 px-2 py-2 backdrop-blur-sm">
-          <p className="text-xs uppercase tracking-widest text-danger">{endReason.replace(/_/g, " ")}</p>
-          <h1 className="text-[28px] font-bold leading-tight text-text">{title}</h1>
-          <p className="text-sm text-muted">
-            Room {roomCode} · {nickname}
-          </p>
-        </div>
+      <header className="border-b border-line pb-2">
+        <p className="text-xs uppercase tracking-widest text-danger">{endReason.replace(/_/g, " ")}</p>
+        <h1 className="text-[28px] font-bold leading-tight text-text">{title}</h1>
+        <p className="text-sm text-muted">
+          Room {roomCode} · {nickname}
+        </p>
       </header>
 
       <section className="grid grid-cols-2 gap-2" data-testid="summary-stats">
