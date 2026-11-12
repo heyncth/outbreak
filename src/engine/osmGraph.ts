@@ -152,10 +152,10 @@ async function fetchEndpoint(
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(endpoint, {
+    const res = await fetch("/api/osm/overpass", {
       method: "POST",
-      body: "data=" + encodeURIComponent(query),
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, endpoint }),
       signal: ctrl.signal,
     });
     if (!res.ok) throw new Error(`Overpass ${res.status}`);

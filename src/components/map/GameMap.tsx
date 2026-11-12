@@ -217,7 +217,10 @@ export function GameMap({
       questEl.setAttribute("data-testid", "quest-marker");
       questEl.style.cssText =
         "width:20px;height:20px;border-radius:50%;background:#3b82f6;border:2px solid #fff;box-shadow:0 0 10px #3b82f6;animation:pulse 1.5s infinite;";
-      questRef.current = new maplibregl.Marker({ element: questEl }).addTo(map);
+      questRef.current = new maplibregl.Marker({ element: questEl })
+        .setLngLat([centerRef.current.lng, centerRef.current.lat])
+        .addTo(map);
+      questRef.current.getElement().style.display = "none";
 
       map.addSource(ZOMBIE_GEOJSON, {
         type: "geojson",
