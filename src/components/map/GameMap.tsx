@@ -186,7 +186,7 @@ export function GameMap({
     map.on("dataloading", (e) => dbg("map dataloading", (e as unknown as { dataType?: string }).dataType));
     map.on("idle", () => dbg("map idle (all tiles settled)"));
 
-    map.on("load", () => {
+    map.on("load", async () => {
       dbg("map load fired", {
         canvas: Boolean(map.getCanvas()),
         canvasSize: [map.getCanvas().width, map.getCanvas().height],
@@ -201,7 +201,7 @@ export function GameMap({
       const selfEl = document.createElement("div");
       selfEl.setAttribute("data-testid", "self-marker");
       selfEl.style.cssText =
-        "width:16px;height:16px;border-radius:50%;background:#16a34a;border:2px solid #0f1a0f;box-shadow:0 0 6px #16a34a;";
+        "width:24px;height:24px;background:url('/icons/self_marker.png') center/contain no-repeat;filter:drop-shadow(0 0 4px #16a34a);";
       markerRef.current = new maplibregl.Marker({ element: selfEl })
         .setLngLat([centerRef.current.lng, centerRef.current.lat])
         .addTo(map);
@@ -210,20 +210,24 @@ export function GameMap({
         type: "geojson",
         data: toFeatureCollection(zombiesRef.current),
       });
+      const iconFiles: Record<string, string> = {
+        WALKER: "/icons/walker.png",
+        RUNNER: "/icons/runner.png",
+        STALKER: "/icons/stalker.png",
+        SCREAMER: "/icons/screamer.png",
+        BRUTE: "/icons/brute.png",
+      };
       for (const t of ZOMBIE_TYPES) {
         const id = `zombie-${t}`;
         if (!map.hasImage(id)) {
-          try {
-            const canvas = zombieIconImage(t, ZOMBIE_COLORS[t] ?? "#ef4444");
-            const ctx2 = canvas.getContext("2d");
-            const imgData = ctx2?.getImageData(0, 0, canvas.width, canvas.height);
-            map.addImage(id, {
-              width: canvas.width,
-              height: canvas.height,
-              data: imgData ? new Uint8Array(imgData.data.buffer) : new Uint8Array(0),
-            });
-          } catch {
-            // image add failed; layer will fall back to default marker
+          const url = iconFiles[t];
+          if (url) {
+            try {
+              const res = await map.loadImage(url);
+              if (!map.hasImage(id)) map.addImage(id, res.data);
+            } catch {
+              // image load failed; fall back to canvas icon
+            }
           }
         }
       }
