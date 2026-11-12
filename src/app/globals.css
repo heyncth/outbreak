@@ -3,14 +3,14 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 html,
 body {
   height: 100%;
-  background: #0a0e0a;
-  color: #e8f5e8;
+  background: #f4f7f4;
+  color: #0f1a0f;
   overscroll-behavior: none;
   touch-action: manipulation;
 }

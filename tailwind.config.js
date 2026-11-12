@@ -4,16 +4,16 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        bg: "#0a0e0a",
-        panel: "#111812",
-        line: "#1e2a20",
-        text: "#e8f5e8",
-        muted: "#8aa88a",
-        danger: "#ff3b3b",
-        warn: "#ffb020",
-        safe: "#3dff9a",
-        hp: "#ff4d4d",
-        noise: "#ffd166",
+        bg: "#f4f7f4",
+        panel: "#ffffff",
+        line: "#d4ddd4",
+        text: "#0f1a0f",
+        muted: "#5a6b5a",
+        danger: "#dc2626",
+        warn: "#d97706",
+        safe: "#16a34a",
+        hp: "#dc2626",
+        noise: "#b45309",
       },
       minHeight: {
         rescue: "64px",

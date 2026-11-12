@@ -7,7 +7,7 @@ import type { LatLng, ZombieTick, WorldStateTick } from "@/types/game";
 import { dbg } from "@/lib/debug";
 
 const STYLE_URL =
-  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+  "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
 const ZOMBIE_COLORS: Record<string, string> = {
   WALKER: "#94a3b8",
@@ -201,7 +201,7 @@ export function GameMap({
       const selfEl = document.createElement("div");
       selfEl.setAttribute("data-testid", "self-marker");
       selfEl.style.cssText =
-        "width:16px;height:16px;border-radius:50%;background:#3dff9a;border:2px solid #0a0e0a;box-shadow:0 0 8px #3dff9a;";
+        "width:16px;height:16px;border-radius:50%;background:#16a34a;border:2px solid #0f1a0f;box-shadow:0 0 6px #16a34a;";
       markerRef.current = new maplibregl.Marker({ element: selfEl })
         .setLngLat([centerRef.current.lng, centerRef.current.lat])
         .addTo(map);

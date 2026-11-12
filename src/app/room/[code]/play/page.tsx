@@ -444,12 +444,7 @@ export default function PlayPage() {
         mode,
         nodes: graphResult.graph?.nodes.size ?? 0,
       });
-      setPathfinding(
-        mode,
-        mode === "DIRECT_VECTOR_FALLBACK"
-          ? "⚠️ Road data busy — Zombies in free-move mode."
-          : null
-      );
+       setPathfinding(mode, null);
 
       const worker = new Worker(new URL("../../../../engine/roomTick.worker.ts", import.meta.url), {
         type: "module",
