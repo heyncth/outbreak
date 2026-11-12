@@ -110,7 +110,7 @@ export function SurvivalHUD({
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-2 p-2">
-      <div className="pointer-events-auto rounded border border-line bg-bg/90 px-3 py-2 backdrop-blur">
+      <div className="pointer-events-auto rounded border border-line bg-bg/90 px-3 py-2 ">
         <div className="flex items-center justify-between gap-3 text-xs">
           <div className="flex-1">
             <div className="mb-1 flex justify-between">
@@ -140,7 +140,7 @@ export function SurvivalHUD({
           </div>
           <div className="text-right font-mono text-sm tabular-nums">
             <div className="text-safe" data-testid="match-timer">
-              ⏱ {fmtTime(tick?.elapsed_sec ?? 0)}
+              {fmtTime(tick?.elapsed_sec ?? 0)}
             </div>
             <div className="text-muted">{tick?.zombies.length ?? 0} zombies</div>
           </div>
@@ -178,7 +178,7 @@ export function SurvivalHUD({
               style={{ width: `${(holdMs / RESCUE_HOLD_MS) * 100}%` }}
             />
             <span className="relative">
-              🆘 HOLD RESCUE · {rescueTarget.dist.toFixed(1)}m
+              HOLD RESCUE · {rescueTarget.dist.toFixed(1)}m
             </span>
           </button>
         )}
@@ -193,7 +193,7 @@ export function SurvivalHUD({
             >
               {zoneCooldownSec > 0
                 ? `ZONE ${Math.ceil(zoneCooldownSec / 60)}:${String(Math.ceil(zoneCooldownSec) % 60).padStart(2, "0")}`
-                : "🛡 CREATE ZONE"}
+                : "CREATE ZONE"}
             </button>
             {!confirmEnd ? (
               <button
@@ -201,7 +201,7 @@ export function SurvivalHUD({
                 onClick={() => setConfirmEnd(true)}
                 className="flex-1 rounded border border-danger bg-bg/90 px-3 py-3 text-xs font-bold text-danger"
               >
-                🛑 END
+                END
               </button>
             ) : (
               <button

@@ -847,12 +847,11 @@ export default function PlayPage() {
         </div>
         {graphNotice && <p className="mt-1 text-warn">{graphNotice}</p>}
         <div className="mt-1 flex gap-3 text-muted">
-          <span>t+{worldTick?.elapsed_sec ?? 0}s</span>
-          <span>zombies {worldTick?.zombies.length ?? 0}</span>
-          <span>zones {worldTick?.safe_zones.length ?? 0}</span>
-          <span>dist {Math.round(distanceM)}m</span>
-          <span>max {(maxSpeedMs * 3.6).toFixed(1)}km/h</span>
-          <span>knocks {knockdowns}</span>
+          <span>{worldTick?.elapsed_sec ?? 0}s</span>
+          <span>z {worldTick?.zombies.length ?? 0}</span>
+          <span>sz {worldTick?.safe_zones.length ?? 0}</span>
+          <span>{Math.round(distanceM)}m</span>
+          <span>{knockdowns} knocks</span>
         </div>
         {!isHost && !worldTick && (
           <p className="mt-1 text-muted">Waiting for host tick…</p>
