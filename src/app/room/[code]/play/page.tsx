@@ -500,6 +500,8 @@ export default function PlayPage() {
           }
         } else if (msg.type === "match_end") {
           void doEndMatch(msg.reason);
+        } else if (msg.type === "quest_complete") {
+          setStatus(`Quest complete · +${msg.bonus_m}m bonus`);
         }
       };
 

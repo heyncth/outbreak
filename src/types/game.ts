@@ -55,6 +55,15 @@ export interface ZombieTick {
   target_player_id: string | null;
 }
 
+export interface QuestTick {
+  target_lat: number;
+  target_lng: number;
+  started_at_ms: number;
+  deadline_ms: number;
+  status: "ACTIVE" | "COMPLETE" | "FAILED";
+  bonus_m: number;
+}
+
 export interface WorldStateTick {
   tick_id: number;
   elapsed_sec: number;
@@ -68,6 +77,7 @@ export interface WorldStateTick {
   })[];
   zombies: ZombieTick[];
   safe_zones: SafeZoneTick[];
+  quest: QuestTick | null;
 }
 
 export interface SafeZoneTick {

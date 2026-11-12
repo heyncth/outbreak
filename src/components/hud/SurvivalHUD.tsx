@@ -123,6 +123,11 @@ export function SurvivalHUD({
             >
               HP {Math.round(hp)}/{maxHp}
             </div>
+            {tick?.quest && tick.quest.status === "ACTIVE" && self && (
+              <div className="text-xs text-safe">
+                Quest: {Math.round(haversineM({ lat: self.lat, lng: self.lng }, { lat: tick.quest.target_lat, lng: tick.quest.target_lng }))}m · {Math.max(0, Math.ceil((tick.quest.deadline_ms - Date.now()) / 1000))}s
+              </div>
+            )}
             <div
               role="progressbar"
               aria-valuenow={Math.round(hp)}

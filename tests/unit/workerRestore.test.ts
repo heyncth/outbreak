@@ -61,6 +61,7 @@ const tick: WorldStateTick = {
       expires_in_sec: 120,
     },
   ],
+  quest: null,
 };
 
 describe("restoreFromTick", () => {

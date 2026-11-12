@@ -97,7 +97,8 @@ export type WorkerOut =
       new_max_hp: number;
       zone_id: string | null;
     }
-  | { type: "match_end"; reason: EndReason };
+  | { type: "match_end"; reason: EndReason }
+  | { type: "quest_complete"; bonus_m: number };
 
 const TICK_MS = 1000;
 const ASTAR_BUDGET_PER_TICK = 5;
@@ -125,6 +126,27 @@ const respawnNotified = new Set<string>();
 
 let lastWaveAt = 0;
 let waveCount = 0;
+let quest: { targetLat: number; targetLng: number; startedAt: number; deadline: number; status: "ACTIVE" | "COMPLETE" | "FAILED"; bonusM: number } | null = null;
+let intensity = 0;
+
+function newQuest(): void {
+  const p = players[0];
+  if (!p) return;
+  const dist = 200 + Math.random() * 300;
+  const ang = Math.random() * Math.PI * 2;
+  quest = {
+    targetLat: p.lat + (dist * Math.cos(ang)) / 111_320,
+    targetLng: p.lng + (dist * Math.sin(ang)) / (111_320 * Math.cos((p.lat * Math.PI) / 180)),
+    startedAt: Date.now(),
+    deadline: Date.now() + 90000,
+    status: "ACTIVE",
+    bonusM: dist,
+  };
+  // despawn all zombies on new quest
+  zombies = [];
+  lastWaveAt = Date.now();
+  waveCount = 0;
+}
 
 function spawnCluster(lat: number, lng: number, count: number, typeOverride?: ZombieType): void {
   for (let i = 0; i < count; i++) {
@@ -397,6 +419,28 @@ function tick(): void {
     spawnCluster(aheadLat, aheadLng, count, type);
   }
 
+  // quest completion check
+  if (quest && quest.status === "ACTIVE") {
+    const p = players[0];
+    if (p) {
+      const d = haversineM({ lat: p.lat, lng: p.lng }, { lat: quest.targetLat, lng: quest.targetLng });
+      if (d <= 15) {
+        quest.status = "COMPLETE";
+        postMessage({ type: "quest_complete", bonus_m: quest.bonusM } satisfies WorkerOut);
+        setTimeout(() => newQuest(), 3000);
+      } else if (now > quest.deadline) {
+        quest.status = "FAILED";
+        // increase zombie count next wave
+        waveCount += 2;
+        setTimeout(() => newQuest(), 3000);
+      }
+    }
+  }
+
+  // intensity
+  const hasKnock = players.some((p) => p.state === "KNOCKED");
+  intensity = Math.max(0, Math.min(100, intensity + (hasKnock ? 5 : -1)));
+
   // safe-zone flags, heal, knock timer / auto-respawn
   for (const p of players) {
     p.in_safe_zone = zones.some(
@@ -612,6 +656,16 @@ function tick(): void {
       })
     ),
     safe_zones: zones.map((z) => ({ ...z })),
+    quest: quest
+      ? {
+          target_lat: quest.targetLat,
+          target_lng: quest.targetLng,
+          started_at_ms: quest.startedAt,
+          deadline_ms: quest.deadline,
+          status: quest.status,
+          bonus_m: quest.bonusM,
+        }
+      : null,
   };
 
   const ms = performance.now() - t0;
@@ -649,19 +703,26 @@ self.onmessage = (ev: MessageEvent<WorkerIn>) => {
     ended = false;
     knockedNotified.clear();
     respawnNotified.clear();
-    if (msg.restoreTick) {
+      if (msg.restoreTick) {
       const restored = restoreFromTick(msg.restoreTick);
       players = restored.players;
       zombies = restored.zombies;
       zones = restored.zones;
       startedAt = restored.startedAt;
       tickId = restored.tickId;
+      if (msg.restoreTick.quest) {
+        const q = msg.restoreTick.quest;
+        quest = { targetLat: q.target_lat, targetLng: q.target_lng, startedAt: q.started_at_ms, deadline: q.deadline_ms, status: q.status, bonusM: q.bonus_m };
+      } else {
+        newQuest();
+      }
     } else {
       players = msg.players.map((p) => ({ ...p }));
       startedAt = msg.startedAt;
       tickId = 0;
       spawnZombies(msg.density);
       spawnSafeZones();
+      newQuest();
       if (msg.hostZones?.length) {
         zones = [...zones, ...msg.hostZones.map((z) => ({ ...z }))];
       }
