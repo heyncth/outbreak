@@ -316,7 +316,7 @@ export function GameMap({
     el.style.height = "16px";
     if (ringRef.current) {
       const ringEl = ringRef.current.getElement();
-      ringEl.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;border:2px solid rgba(255,209,102,0.5);background:rgba(255,209,102,0.08);transform:translate(-50%,-50%);margin-left:${-size / 2 + 8}px;margin-top:${-size / 2 + 8}px;pointer-events:none;`;
+      ringEl.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;border:2px solid rgba(255,209,102,0.5);background:rgba(255,209,102,0.08);pointer-events:none;`;
       ringRef.current.setLngLat(lngLat);
     }
     // recenter only when self marker would leave the viewport — free pan otherwise
