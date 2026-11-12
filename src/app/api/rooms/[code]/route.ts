@@ -27,7 +27,7 @@ export async function GET(
 
   const { data: players, error: pErr } = await sb
     .from("room_players")
-    .select("player_id, nickname, state, hp, max_hp, distance_m, max_speed_ms")
+    .select("player_id, nickname, state, hp, max_hp")
     .eq("room_id", room.id)
     .order("joined_at", { ascending: true });
 
@@ -51,8 +51,6 @@ export async function GET(
         state: p.state,
         hp: p.hp,
         max_hp: p.max_hp,
-        distance_m: p.distance_m,
-        max_speed_ms: p.max_speed_ms,
       })),
     },
     { headers: { "Cache-Control": "no-store" } }

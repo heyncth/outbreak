@@ -87,11 +87,17 @@ export async function POST(req: NextRequest) {
   });
   if (!pick) return apiError("FORBIDDEN", "No eligible host candidate");
 
-  const { error: updErr } = await sb
+  // optimistic lock: only promote if host has not changed since read
+  const { data: upd, error: updErr } = await sb
     .from("game_rooms")
     .update({ host_player_id: pick.player_id })
-    .eq("id", room_id);
+    .eq("id", room_id)
+    .eq("host_player_id", room.host_player_id)
+    .select("id");
   if (updErr) return apiError("DB_UNAVAILABLE", dbMessage(updErr));
+  if (!upd || upd.length === 0) {
+    return apiError("ROOM_CONFLICT", "Host changed — retry migration");
+  }
 
   await sb
     .from("room_players")

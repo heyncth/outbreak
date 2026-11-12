@@ -249,7 +249,7 @@ function writeCache(lat: number, lng: number, result: GraphResult): void {
 
 /**
  * Graph sources in order: sessionStorage cache → bundled zone → OSM API bbox
- * (real-time extract, any location) → DIRECT_VECTOR_FALLBACK.
+ * (real-time extract, every location) → DIRECT_VECTOR_FALLBACK.
  */
 export async function loadRoadGraph(center: LatLng): Promise<GraphResult> {
   const cached = readCache(center.lat, center.lng);
@@ -279,7 +279,7 @@ export async function loadRoadGraph(center: LatLng): Promise<GraphResult> {
     dbg("no bundled zone — trying OSM API");
   }
 
-  // real-time extract by bbox: any Vietnam location, no server
+  // real-time extract by bbox: every Vietnam location, no server
   try {
     const g = await fetchOsmApiGraph(center);
     if (g) {

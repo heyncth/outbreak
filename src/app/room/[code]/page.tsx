@@ -53,18 +53,29 @@ export default function RoomPage() {
     setJoining(true);
     (async () => {
       try {
-        const res = await fetch("/api/rooms/join", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            room_code: roomCode,
-            nickname: nickname.trim(),
-            player_id: playerId,
-            lat,
-            lng,
-          }),
-        });
-        const data = await res.json();
+        const prevToken = useGameStore.getState().joinToken;
+        const doJoin = (token: string | null, pid: string) =>
+          fetch("/api/rooms/join", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              room_code: roomCode,
+              nickname: nickname.trim(),
+              player_id: pid,
+              lat,
+              lng,
+              join_token: token,
+            }),
+          });
+        let res = await doJoin(prevToken, playerId);
+        let data = await res.json();
+        let joinedId = playerId;
+        if (res.status === 403) {
+          // stale/foreign token — re-enter as a fresh player
+          joinedId = crypto.randomUUID();
+          res = await doJoin(null, joinedId);
+          data = await res.json();
+        }
         if (!res.ok) {
           setJoinError(data?.error?.message ?? "Join failed");
           setStep("error");
@@ -72,7 +83,7 @@ export default function RoomPage() {
         }
         useGameStore.getState().resetRoom();
         useGameStore.getState().setSession({
-          playerId,
+          playerId: joinedId,
           nickname: nickname.trim(),
           joinToken: data.join_token ?? null,
         });

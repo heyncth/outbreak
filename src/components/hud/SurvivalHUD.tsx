@@ -13,7 +13,7 @@ interface SurvivalHUDProps {
   onCreateZone?: () => void;
   zoneCooldownSec?: number;
   onEndMatch?: () => void;
-  onRescue?: (victimId: string) => void;
+  onRescue?: (victimId: string, holdElapsedMs: number) => void;
   rescuePending?: boolean;
   statusLine?: string;
 }
@@ -68,7 +68,9 @@ export function SurvivalHUD({
       window.clearInterval(holdRef.current);
       holdRef.current = null;
     }
-    if (complete && rescueTarget && onRescue) onRescue(rescueTarget.id);
+    if (complete && rescueTarget && onRescue) {
+      onRescue(rescueTarget.id, Date.now() - holdStartRef.current);
+    }
     setHoldMs(0);
   };
 

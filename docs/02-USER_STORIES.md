@@ -84,13 +84,13 @@
 
 ## EPIC 3: Road Graph, Zombie AI & Map Failure Fallback
 
-### US-3.1: Load OSM road graph + Overpass failure fallback
+### US-3.1: Load OSM road graph + source failure fallback
 - **Priority:** `[M]` | **Effort:** `5 pts`
-- **Story:** As the system, I want walkable roads around the group so Zombies follow streets, with a non-blocking fallback if Overpass fails.
+- **Story:** As the system, I want walkable roads around the group so Zombies follow streets, with a non-blocking fallback if data sources fail.
 - **AC:**
-  1. On Host Start, query Overpass radius **1200 m** around group centroid, `timeout: 8000 ms`.
-  2. **Edge — timeout / 429 / network error:** Retry once on mirror (`overpass.kumi.systems` or `overpass-api.de`); total wait ≤ **10 s**.
-  3. **Edge — still failing or `nodes.length === 0`:** Set `pathfinding_mode = 'DIRECT_VECTOR_FALLBACK'`, do **not** hang Start; show notice *"⚠️ Detailed road data busy — Zombies using free-move mode."*
+  1. On Host Start, load graph tiered: `sessionStorage` cache → bundled zone (`public/graphs/manifest.json` bbox) → real-time OSM API `0.6/map?bbox=` (±1200 m, timeout 30 s per retry).
+  2. **Edge — 429 / timeout / network error:** retry the OSM API every 30 s in the background; total wait never blocks Start.
+  3. **Edge — still failing or `nodes.length === 0`:** Set `pathfinding_mode = 'DIRECT_VECTOR_FALLBACK'`, do **not** hang Start; show notice *"⚠️ Detailed road data busy — Zombies using free-move mode."* Background retry hot-swaps the graph (`set_graph`) when a source succeeds.
   4. **Success:** Build directed graph `G(V, E)`; spawn 2 system Safe Zones at road nodes **150–300 m** from centroid; spawn initial Zombies on road nodes ≥ **80 m** from players.
 
 ### US-3.2: Five Zombie types + A* FSM loop

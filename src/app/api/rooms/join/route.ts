@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import {
   apiError,
   apiOk,
+  clientIp,
   dbMessage,
   isValidCoords,
   isValidNickname,
@@ -19,13 +20,13 @@ export async function POST(req: NextRequest) {
   } catch {
     return apiError("VALIDATION_ERROR", "Invalid JSON body");
   }
-  const { room_code, nickname, player_id, lat, lng } = (body ?? {}) as Record<string, unknown>;
+  const { room_code, nickname, player_id, lat, lng, join_token } = (body ?? {}) as Record<string, unknown>;
 
   if (!isValidRoomCode(room_code)) return apiError("INVALID_ROOM_CODE", "Room code: 6 chars A–Z 2–9");
   if (!isValidUuid(player_id)) return apiError("VALIDATION_ERROR", "Invalid player_id");
   if (!isValidNickname(nickname)) return apiError("INVALID_NICKNAME", "Nickname must be 2–30 chars");
   if (!isValidCoords(lat, lng)) return apiError("INVALID_COORDS", "Invalid lat/lng");
-  if (!rateLimit(`join:${player_id}`, 20)) return apiError("RATE_LIMITED", "Too many join attempts");
+  if (!rateLimit(`join:${clientIp(req)}:${player_id}`, 20)) return apiError("RATE_LIMITED", "Too many join attempts");
 
   const sb = serverClient();
 
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
 
   const { data: existing, error: exErr } = await sb
     .from("room_players")
-    .select("id")
+    .select("id, join_token")
     .eq("room_id", room.id)
     .eq("player_id", player_id)
     .maybeSingle();
@@ -48,6 +49,14 @@ export async function POST(req: NextRequest) {
   if (exErr) return apiError("DB_UNAVAILABLE", dbMessage(exErr));
 
   const rejoined = Boolean(existing);
+  if (rejoined) {
+    // rejoin must prove identity — otherwise anyone holding only the room
+    // code could steal the token (host takeover) or keep a ghost alive
+    const tok = typeof join_token === "string" ? join_token : "";
+    if (!isValidUuid(tok) || tok !== existing?.join_token) {
+      return apiError("FORBIDDEN", "Invalid session — rejoin needs stored join token");
+    }
+  }
 
   if (!rejoined && room.status !== "WAITING") {
     return apiError("MATCH_ALREADY_STARTED", "Match already started");

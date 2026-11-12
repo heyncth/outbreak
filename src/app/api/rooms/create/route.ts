@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import {
   apiError,
   apiOk,
+  clientIp,
   dbMessage,
   isValidCoords,
   isValidNickname,
@@ -14,10 +15,11 @@ import { serverClient } from "@/lib/supabase";
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 function makeCode(): string {
+  // alphabet length 32 divides 256 — no modulo bias
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
   let s = "";
-  for (let i = 0; i < 6; i++) {
-    s += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
-  }
+  for (const b of bytes) s += CODE_ALPHABET[b % CODE_ALPHABET.length];
   return s;
 }
 
@@ -33,9 +35,16 @@ export async function POST(req: NextRequest) {
   if (!isValidUuid(player_id)) return apiError("VALIDATION_ERROR", "Invalid player_id");
   if (!isValidNickname(nickname)) return apiError("INVALID_NICKNAME", "Nickname must be 2–30 chars");
   if (!isValidCoords(lat, lng)) return apiError("INVALID_COORDS", "Invalid lat/lng");
-  if (!rateLimit(`create:${player_id}`, 10)) return apiError("RATE_LIMITED", "Too many room creates");
+  if (!rateLimit(`create:${clientIp(req)}:${player_id}`, 10)) return apiError("RATE_LIMITED", "Too many room creates");
 
   const sb = serverClient();
+
+  // retention: drop abandoned waiting rooms older than 24h (players cascade)
+  await sb
+    .from("game_rooms")
+    .delete()
+    .eq("status", "WAITING")
+    .lt("created_at", new Date(Date.now() - 24 * 3600_000).toISOString());
 
   for (let attempt = 0; attempt < 5; attempt++) {
     const room_code = makeCode();

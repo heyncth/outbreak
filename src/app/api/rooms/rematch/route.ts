@@ -49,6 +49,16 @@ export async function POST(req: NextRequest) {
   const { error: zonesErr } = await sb.from("safe_zones").delete().eq("room_id", room_id);
   if (zonesErr) return apiError("DB_UNAVAILABLE", dbMessage(zonesErr));
 
+  // ghosts: DISCONNECTED >10min no longer count against capacity or get resurrected
+  const ghostCutoff = new Date(Date.now() - 600_000).toISOString();
+  const { error: ghostErr } = await sb
+    .from("room_players")
+    .delete()
+    .eq("room_id", room_id)
+    .eq("state", "DISCONNECTED")
+    .lt("disconnected_at", ghostCutoff);
+  if (ghostErr) return apiError("DB_UNAVAILABLE", dbMessage(ghostErr));
+
   const { error: playersErr } = await sb
     .from("room_players")
     .update({

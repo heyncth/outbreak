@@ -1,24 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
+import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 import type { PlayerTelemetry, RoomSnapshot, WorldStateTick, GameActionEvent } from "@/types/game";
 import { useGameStore } from "@/store/useGameStore";
-
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const key =
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-let cachedClient: SupabaseClient | null = null;
-
-function getClient(): SupabaseClient {
-  if (!url || !key) throw new Error("Missing Supabase env");
-  if (!cachedClient) {
-    cachedClient = createClient(url, key, { auth: { persistSession: false } });
-  }
-  return cachedClient;
-}
+import { browserClient } from "@/lib/supabase";
 
 interface UseRealtimeRoomOpts {
   roomCode: string;
@@ -61,28 +47,22 @@ export function useRealtimeRoom({
   }, []);
 
   const sendHeartbeat = useCallback(() => {
-    const ch = channelRef.current;
-    if (!ch || !playerId) return;
-    void ch.send({
-      type: "broadcast",
-      event: "heartbeat",
-      payload: { player_id: playerId, timestamp: Date.now() },
-    });
     const rid = roomIdRef.current;
-    if (rid) {
-      const { distanceM, maxSpeedMs, joinToken } = useGameStore.getState();
-      void fetch("/api/rooms/heartbeat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          room_id: rid,
-          player_id: playerId,
-          join_token: joinToken,
-          distance_m: distanceM,
-          max_speed_ms: maxSpeedMs,
-        }),
-      }).catch(() => {});
-    }
+    if (!rid || !playerId) return;
+    const { distanceM, maxSpeedMs, joinToken, selfPos } = useGameStore.getState();
+    void fetch("/api/rooms/heartbeat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        room_id: rid,
+        player_id: playerId,
+        join_token: joinToken,
+        distance_m: distanceM,
+        max_speed_ms: maxSpeedMs,
+        lat: selfPos?.lat,
+        lng: selfPos?.lng,
+      }),
+    }).catch(() => {});
   }, [playerId]);
 
   useEffect(() => {
@@ -90,7 +70,7 @@ export function useRealtimeRoom({
       setConnected(false);
       return;
     }
-    const sb = sbRef.current ?? getClient();
+    const sb = sbRef.current ?? browserClient();
     sbRef.current = sb;
     const channel = sb.channel(`room:${roomCode}`, { config: { broadcast: { self: false } } });
 

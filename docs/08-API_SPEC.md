@@ -28,7 +28,7 @@
 | 404 | `ROOM_NOT_FOUND`, `MATCH_NOT_FOUND`, `PLAYER_NOT_FOUND` |
 | 409 | `ROOM_FULL`, `ROOM_CONFLICT` |
 | 429 | `RATE_LIMITED` |
-| 500 | `INTERNAL_ERROR`, `OVERPASS_FAILED` (if proxied) |
+| 500 | `INTERNAL_ERROR` |
 | 503 | `DB_UNAVAILABLE` |
 
 ---
@@ -37,13 +37,14 @@
 
 | Endpoint / channel | Limit |
 | --- | --- |
-| `POST /api/rooms/create` | 10 / min |
-| `POST /api/rooms/join` | 20 / min |
+| `POST /api/rooms/create` | 10 / min (IP + player) |
+| `POST /api/rooms/join` | 20 / min (IP + player) |
 | `POST /api/rooms/start` | 10 / min |
 | `POST /api/rooms/end` | 5 / min |
 | `POST /api/rooms/rematch` | 5 / min |
 | `POST /api/rooms/safe-zone` | 1 / 10 min (cooldown server-checked) |
 | `POST /api/rescue` | 5 / min |
+| `POST /api/rooms/heartbeat` | 30 / min |
 | `GET /api/matches/:roomId` | 30 / min |
 | Broadcast `player_telemetry` | **client-side 1 Hz hard throttle** |
 
@@ -104,7 +105,8 @@ Exceeded → `429` + `RATE_LIMITED`.
   "nickname": "DienThang",
   "player_id": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
   "lat": 16.054450,
-  "lng": 108.202210
+  "lng": 108.202210,
+  "join_token": "9f8e7d6c-… or null"
 }
 ```
 
@@ -115,13 +117,14 @@ Exceeded → `429` + `RATE_LIMITED`.
   "player_id": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
   "is_host": false,
   "status": "WAITING",
-  "rejoined": false
+  "rejoined": false,
+  "join_token": "3a5f…"
 }
 ```
 
-**Rejoin:** same `player_id` already in room → `rejoined: true`, allowed even if `ACTIVE`.
+**Rejoin:** same `player_id` already in room → `rejoined: true`, allowed even if `ACTIVE`, **only** when the request carries the matching stored `join_token`; otherwise `403 FORBIDDEN` (client recovers by re-joining with a fresh `player_id`). Without a token the server returns no data and touches no rows.
 
-**Errors:** `404 ROOM_NOT_FOUND` | `403 MATCH_ALREADY_STARTED` | `409 ROOM_FULL` | `400 INVALID_ROOM_CODE`
+**Errors:** `403 FORBIDDEN` | `404 ROOM_NOT_FOUND` | `403 MATCH_ALREADY_STARTED` | `409 ROOM_FULL` | `400 INVALID_ROOM_CODE` | `429 RATE_LIMITED`
 
 **Schema join response**
 ```json
@@ -133,7 +136,8 @@ Exceeded → `429` + `RATE_LIMITED`.
     "player_id": { "type": "string", "format": "uuid" },
     "is_host": { "type": "boolean" },
     "status": { "enum": ["WAITING", "ACTIVE", "ENDED"] },
-    "rejoined": { "type": "boolean" }
+    "rejoined": { "type": "boolean" },
+    "join_token": { "type": ["string", "null"], "format": "uuid" }
   }
 }
 ```
@@ -194,7 +198,7 @@ Host only. Sets `ACTIVE`, triggers OSM fetch (server or host-side per architectu
 }
 ```
 
-**Errors:** `403 NOT_HOST` | `404 ROOM_NOT_FOUND` | `409 ROOM_CONFLICT` (not WAITING) | `500 OVERPASS_FAILED` only if fallback also disabled (normally still 200 with `DIRECT_VECTOR_FALLBACK`)
+**Errors:** `403 NOT_HOST` | `404 ROOM_NOT_FOUND` | `409 ROOM_CONFLICT` (not WAITING) — start still returns `200` with `pathfinding_mode: DIRECT_VECTOR_FALLBACK` when no graph source is reachable
 
 **pathfinding_mode enum:** `GRAPH_ASTAR` | `DIRECT_VECTOR_FALLBACK`
 
@@ -284,13 +288,17 @@ Host only; 10 min server cooldown.
 
 ### 3.8 `POST /api/rescue`
 
-Delegates to `attempt_rescue` RPC.
+Delegates to `attempt_rescue` RPC. Locations are owner-written: rescuer coords from this request (token-bound), victim coords from the victim's own heartbeat. The 3 s hold is checked server-side via `hold_elapsed_ms`.
 
 **Request**
 ```json
 {
   "rescuer_id": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
-  "victim_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+  "victim_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "join_token": "uuid",
+  "rescuer_lat": 16.05445,
+  "rescuer_lng": 108.20221,
+  "hold_elapsed_ms": 3012
 }
 ```
 
@@ -304,7 +312,7 @@ Delegates to `attempt_rescue` RPC.
 { "rescued": false, "reason": "TOO_FAR_OR_INVALID" }
 ```
 
-**Errors:** `404 PLAYER_NOT_FOUND` | `429`
+**Errors:** `400 VALIDATION_ERROR` (hold missing / < 3000 ms / > 15000 ms) | `403 FORBIDDEN` | `404 PLAYER_NOT_FOUND` | `429`
 
 ---
 
@@ -322,6 +330,29 @@ Delegates to `attempt_rescue` RPC.
 ```
 
 **Errors:** `404 MATCH_NOT_FOUND`
+
+---
+
+### 3.10 `POST /api/rooms/heartbeat`
+
+Every 5 s per connected player while in a room. Refreshes `last_seen_at`; optionally writes the player's **own** location (freshness for the rescue distance check) and clamped stats (monotonic, ≤ 100 m growth per report, speed ≤ 12 m/s).
+
+**Request**
+```json
+{
+  "room_id": "c81d4e2e-bcf2-11e6-869b-7df92533d2db",
+  "player_id": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
+  "join_token": "uuid",
+  "distance_m": 812.4,
+  "max_speed_ms": 4.1,
+  "lat": 16.054512,
+  "lng": 108.202310
+}
+```
+
+**Response `200`:** `{ "ok": true }`
+
+**Errors:** `403 FORBIDDEN` | `404 PLAYER_NOT_FOUND` | `429 RATE_LIMITED`
 
 ---
 
@@ -381,6 +412,7 @@ Delegates to `attempt_rescue` RPC.
     "tick_id": 185,
     "elapsed_sec": 185,
     "pathfinding_mode": "GRAPH_ASTAR",
+    "host_player_id": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
     "players": [
       {
         "id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
@@ -425,6 +457,8 @@ Delegates to `attempt_rescue` RPC.
 
 **Player state enum:** `ALIVE` | `KNOCKED` | `DISCONNECTED`
 
+**Forge guard:** receivers drop a tick whose `host_player_id` ≠ snapshot `host_player_id`.
+
 ### 4.3 `game_action`
 
 ```json
@@ -450,16 +484,11 @@ Delegates to `attempt_rescue` RPC.
 
 Clients apply UI only; authoritative world remains host tick.
 
-### 4.4 `heartbeat` (client → host, every 5 s during ACTIVE)
+**Forge guard:** receivers accept `SPAWN_SAFE_ZONE` / `REMATCH` only when `actor_player_id` = snapshot host; `MATCH_ENDED` with `end_reason: HOST_ENDED` likewise (for `ALL_KNOCKED`, receivers also require the last tick to show everyone `KNOCKED`). Server routes re-validate every mutation regardless.
 
-```json
-{
-  "event": "heartbeat",
-  "payload": { "player_id": "…", "timestamp": 1762742000123 }
-}
-```
+### 4.4 Room liveness
 
-Missing > 10 s → server/host marks `DISCONNECTED`. Host missing > 15 s → `HOST_MIGRATED`.
+Client liveness is the REST heartbeat (§3.10), not a broadcast. Missing > 10 s → server/host marks `DISCONNECTED`. Host missing > 15 s → `HOST_MIGRATED`.
 
 ---
 

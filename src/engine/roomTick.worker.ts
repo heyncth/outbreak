@@ -128,11 +128,22 @@ const respawnNotified = new Set<string>();
 let lastWaveAt = 0;
 let waveCount = 0;
 let quest: { targetLat: number; targetLng: number; startedAt: number; deadline: number; status: "ACTIVE" | "COMPLETE" | "FAILED"; bonusM: number } | null = null;
-let intensity = 0;
+let zombieCap = DENSITY_COUNT.MEDIUM * 3;
+
+/** quest/wave anchor: first ALIVE player — players[0] may be knocked or gone */
+function aliveAnchor(): PlayerWorld | null {
+  return players.find((p) => p.state === "ALIVE") ?? null;
+}
 
 function newQuest(): void {
-  const p = players[0];
-  if (!p) return;
+  const p = aliveAnchor();
+  if (!p) {
+    // everyone down — retry once someone is alive
+    setTimeout(() => {
+      if (!ended) newQuest();
+    }, 3000);
+    return;
+  }
   const dist = 200 + Math.random() * 300;
   const ang = Math.random() * Math.PI * 2;
   quest = {
@@ -148,7 +159,10 @@ function newQuest(): void {
 }
 
 function spawnCluster(lat: number, lng: number, count: number, typeOverride?: ZombieType): void {
-  for (let i = 0; i < count; i++) {
+  const room = zombieCap - zombies.length;
+  if (room <= 0) return;
+  const n = Math.min(count, room);
+  for (let i = 0; i < n; i++) {
     const ang = Math.random() * Math.PI * 2;
     const r = 5 + Math.random() * 15;
     const zLat = lat + (r * Math.cos(ang)) / 111_320;
@@ -158,11 +172,11 @@ function spawnCluster(lat: number, lng: number, count: number, typeOverride?: Zo
   }
 }
 
-function spawnZombies(density: Density): void {
+function spawnZombies(): void {
   zombies = [];
   lastWaveAt = Date.now();
   waveCount = 0;
-  const p = players[0];
+  const p = aliveAnchor();
   const baseLat = p ? p.lat : center.lat;
   const baseLng = p ? p.lng : center.lng;
   // spawn 3 in a cluster 80m ahead of player
@@ -422,18 +436,20 @@ function tick(): void {
   if (now - lastWaveAt >= 60000 && players.length > 0) {
     lastWaveAt = now;
     waveCount++;
-    const p = players[0] as PlayerWorld;
-    const type: ZombieType =
-      waveCount <= 2 ? "WALKER" : waveCount <= 4 ? "RUNNER" : waveCount <= 6 ? "STALKER" : "SCREAMER";
-    const count = waveCount <= 2 ? 2 : 3;
-    const aheadLat = p.lat + (70 / 111_320);
-    const aheadLng = p.lng;
-    spawnCluster(aheadLat, aheadLng, count, type);
+    const p = aliveAnchor();
+    if (p) {
+      const type: ZombieType =
+        waveCount <= 2 ? "WALKER" : waveCount <= 4 ? "RUNNER" : waveCount <= 6 ? "STALKER" : "SCREAMER";
+      const count = waveCount <= 2 ? 2 : 3;
+      const aheadLat = p.lat + (70 / 111_320);
+      const aheadLng = p.lng;
+      spawnCluster(aheadLat, aheadLng, count, type);
+    }
   }
 
   // quest completion check
   if (quest && quest.status === "ACTIVE") {
-    const p = players[0];
+    const p = aliveAnchor();
     if (p) {
       const d = haversineM({ lat: p.lat, lng: p.lng }, { lat: quest.targetLat, lng: quest.targetLng });
       if (d <= 15) {
@@ -448,10 +464,6 @@ function tick(): void {
       }
     }
   }
-
-  // intensity
-  const hasKnock = players.some((p) => p.state === "KNOCKED");
-  intensity = Math.max(0, Math.min(100, intensity + (hasKnock ? 5 : -1)));
 
   // safe-zone flags, heal, knock timer / auto-respawn
   for (const p of players) {
@@ -713,6 +725,7 @@ self.onmessage = (ev: MessageEvent<WorkerIn>) => {
     pathQueue = [];
     swarmCall = null;
     ended = false;
+    zombieCap = DENSITY_COUNT[msg.density] * 3;
     knockedNotified.clear();
     respawnNotified.clear();
       if (msg.restoreTick) {
@@ -732,7 +745,7 @@ self.onmessage = (ev: MessageEvent<WorkerIn>) => {
       players = msg.players.map((p) => ({ ...p }));
       startedAt = msg.startedAt;
       tickId = 0;
-      spawnZombies(msg.density);
+      spawnZombies();
       spawnSafeZones();
       newQuest();
       if (msg.hostZones?.length) {

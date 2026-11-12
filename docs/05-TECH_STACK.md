@@ -128,9 +128,10 @@ Host device
 | Name | Required | Purpose |
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | Prod | Supabase project |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Prod | Anon client |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Prod | Browser client key (anon key as fallback) |
+| `SUPABASE_SECRET_KEY` | Prod | Server routes only (never `NEXT_PUBLIC_*`) |
 | `?devsim=1` (runtime) | Dev | Enable devsim via localStorage (`outbreak_devsim`) |
-| `OVERPASS_URL` | Optional | Primary Overpass endpoint override |
-| `OVERPASS_MIRROR_URL` | Optional | Fallback endpoint |
+
+Road graph data: bundled zones in `public/graphs/` + real-time OSM API `0.6/map?bbox=`; no Overpass (rate-limits public IPs).
 
 Secrets (if any service role key for API routes) **never** in `NEXT_PUBLIC_*`.

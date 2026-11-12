@@ -26,3 +26,13 @@ export function serverClient(): SupabaseClient {
   }
   return cachedServer;
 }
+
+let cachedBrowser: SupabaseClient | null = null;
+
+/** Shared anon-key client for browser realtime/fetch. */
+export function browserClient(): SupabaseClient {
+  if (!cachedBrowser) {
+    cachedBrowser = createClient(url, publishable, { auth: { persistSession: false } });
+  }
+  return cachedBrowser;
+}

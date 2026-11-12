@@ -146,22 +146,36 @@ export default function PlayPage() {
     const s = useGameStore.getState();
     const lat = reading?.lat ?? 16.054407;
     const lng = reading?.lng ?? 108.202167;
-    void fetch("/api/rooms/join", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        room_code: roomCode,
-        nickname: s.nickname?.trim() || readSession().nickname || "Survivor",
-        player_id: playerId,
-        lat,
-        lng,
-      }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.join_token) {
+    void (async () => {
+      try {
+        const body = (pid: string, token: string | null) =>
+          JSON.stringify({
+            room_code: roomCode,
+            nickname: s.nickname?.trim() || readSession().nickname || "Survivor",
+            player_id: pid,
+            lat,
+            lng,
+            join_token: token,
+          });
+        let res = await fetch("/api/rooms/join", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: body(playerId, s.joinToken),
+        });
+        let pid = playerId;
+        if (res.status === 403) {
+          pid = crypto.randomUUID();
+          res = await fetch("/api/rooms/join", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: body(pid, null),
+          });
+        }
+        if (!res.ok) return;
+        const d = (await res.json()) as { join_token?: string; is_host?: boolean; room_id?: string };
+        if (d.join_token) {
           setSession({
-            playerId,
+            playerId: pid,
             nickname: s.nickname || readSession().nickname || "Survivor",
             joinToken: d.join_token,
           });
@@ -171,8 +185,10 @@ export default function PlayPage() {
             roomId: d.room_id ?? null,
           });
         }
-      })
-      .catch(() => {});
+      } catch {
+        /* retry next joinToken change */
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerId, joinToken, roomCode, setSession]);
 
@@ -205,6 +221,9 @@ export default function PlayPage() {
 
   const onTick = useCallback(
     (tick: WorldStateTick) => {
+      // drop forged ticks — only the current host may author the world
+      const host = snapshotRef.current?.host_player_id;
+      if (!host || tick.host_player_id !== host) return;
       if (tick.tick_id % 10 === 1) dbg("client onTick", tick.tick_id, `t+${tick.elapsed_sec}s`);
       lastTickAtRef.current = Date.now();
       setWorldTick(tick);
@@ -320,7 +339,24 @@ export default function PlayPage() {
     enabled: Boolean(playerId),
     roomId: snapshot?.room_id ?? null,
     onTick,
+    onLobby: () => {
+      void fetchRoomSnapshot(roomCode).then((snap) => {
+        if (snap) setSnapshot(snap);
+      });
+    },
     onAction: (action) => {
+      // forge guard: host-authoritative actions must come from the host
+      const snapHost = snapshotRef.current?.host_player_id;
+      const actor = action.actor_player_id;
+      if (action.action === "MATCH_ENDED") {
+        if (action.data.end_reason === "HOST_ENDED" && actor !== snapHost) return;
+        if (action.data.end_reason === "ALL_KNOCKED") {
+          const t = useGameStore.getState().worldTick;
+          if (t && t.players.length > 0 && !t.players.every((p) => p.state === "KNOCKED")) return;
+        }
+      } else if (action.action === "SPAWN_SAFE_ZONE" || action.action === "REMATCH") {
+        if (!snapHost || actor !== snapHost) return;
+      }
       if (action.action === "MATCH_ENDED") {
         const summary = action.data.summary as MatchSummaryJson | undefined;
         if (summary) {
@@ -337,6 +373,10 @@ export default function PlayPage() {
         workerRef.current?.postMessage({ type: "stop" } satisfies WorkerIn);
       } else if (action.action === "HOST_MIGRATED") {
         const newHost = action.data.new_host_player_id as string | undefined;
+        if (newHost && snapshotRef.current && snapshotRef.current.host_player_id !== newHost) {
+          // keep the tick forge-guard's host reference current
+          setSnapshot({ ...snapshotRef.current, host_player_id: newHost });
+        }
         if (newHost && newHost === playerIdRef.current) {
           restoreTickRef.current = useGameStore.getState().worldTick;
           useGameStore.getState().setRoom({
@@ -477,7 +517,7 @@ export default function PlayPage() {
             }
           }
           setWorldTick(msg.payload);
-          broadcastTickRef.current?.(msg.payload);
+          broadcastTickRef.current?.({ ...msg.payload, host_player_id: playerIdRef.current ?? undefined });
         } else if (msg.type === "slow_tick") {
           console.warn(`[tick] over budget: ${msg.ms.toFixed(1)} ms`);
         } else if (msg.type === "player_knocked") {
@@ -605,11 +645,10 @@ export default function PlayPage() {
   }, [snapshot, selfPos, worldTick, playerId, joinToken]);
 
   const onRescue = useCallback(
-    async (victimId: string) => {
+    async (victimId: string, holdElapsedMs: number) => {
       if (!playerId || rescuePending) return;
       const me = worldTick?.players.find((p) => p.player_id === playerId);
-      const victim = worldTick?.players.find((p) => p.player_id === victimId);
-      if (!me || !victim) return;
+      if (!me) return;
       setRescuePending(true);
       try {
         const res = await fetch("/api/rescue", {
@@ -622,8 +661,7 @@ export default function PlayPage() {
             join_token: useGameStore.getState().joinToken,
             rescuer_lat: me.lat,
             rescuer_lng: me.lng,
-            victim_lat: victim.lat,
-            victim_lng: victim.lng,
+            hold_elapsed_ms: holdElapsedMs,
           }),
         });
         const data = (await res.json()) as {
@@ -870,7 +908,7 @@ export default function PlayPage() {
           onCreateZone={() => void onCreateZone()}
           zoneCooldownSec={zoneCooldownSec}
           onEndMatch={onEndMatch}
-          onRescue={(id) => void onRescue(id)}
+          onRescue={onRescue}
           rescuePending={rescuePending}
           statusLine={status}
         />

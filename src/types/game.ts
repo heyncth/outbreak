@@ -68,6 +68,8 @@ export interface WorldStateTick {
   tick_id: number;
   elapsed_sec: number;
   pathfinding_mode: PathfindingModeLike;
+  /** author stamp — set by the host when broadcasting, validated by receivers */
+  host_player_id?: string;
   players: (RoomPlayer & {
     lat: number;
     lng: number;

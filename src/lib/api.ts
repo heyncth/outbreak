@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type ErrorCode =
@@ -54,6 +54,12 @@ export function apiOk<T>(body: T, status = 200): NextResponse {
 }
 
 const hits = new Map<string, { n: number; reset: number }>();
+
+/** Client IP for rate-limit keys; x-forwarded-for first hop (Vercel sets it). */
+export function clientIp(req: NextRequest): string {
+  const fwd = req.headers.get("x-forwarded-for");
+  return fwd ? (fwd.split(",")[0] ?? "").trim().slice(0, 45) || "na" : "na";
+}
 
 export function rateLimit(key: string, limit: number, windowMs = 60_000): boolean {
   const now = Date.now();

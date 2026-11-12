@@ -3,15 +3,15 @@ import {
   apiError,
   apiOk,
   dbMessage,
+  isValidCoords,
   isValidUuid,
   rateLimit,
   requireJoinToken,
 } from "@/lib/api";
 import { serverClient } from "@/lib/supabase";
 
-function isValidLatLng(v: unknown): v is number {
-  return typeof v === "number" && Number.isFinite(v);
-}
+const RESCUE_HOLD_MS = 3000;
+const HOLD_STALE_MS = 15000;
 
 export async function POST(req: NextRequest) {
   let body: unknown;
@@ -27,53 +27,38 @@ export async function POST(req: NextRequest) {
     join_token,
     rescuer_lat,
     rescuer_lng,
-    victim_lat,
-    victim_lng,
+    hold_elapsed_ms,
   } = (body ?? {}) as Record<string, unknown>;
   if (!isValidUuid(room_id)) return apiError("VALIDATION_ERROR", "Invalid room_id");
   if (!isValidUuid(rescuer_id)) return apiError("VALIDATION_ERROR", "Invalid rescuer_id");
   if (!isValidUuid(victim_id)) return apiError("VALIDATION_ERROR", "Invalid victim_id");
   if (!rateLimit(`rescue:${rescuer_id}`, 5)) return apiError("RATE_LIMITED", "Too many rescue attempts");
 
+  // 3s hold enforced server-side (client HUD hold is UI, this is truth)
+  if (typeof hold_elapsed_ms !== "number" || !Number.isFinite(hold_elapsed_ms)) {
+    return apiError("VALIDATION_ERROR", "hold_elapsed_ms required");
+  }
+  if (hold_elapsed_ms < RESCUE_HOLD_MS || hold_elapsed_ms > HOLD_STALE_MS) {
+    return apiError("VALIDATION_ERROR", "Rescue hold not completed");
+  }
+
   const sb = serverClient();
   if (!(await requireJoinToken(sb, room_id, rescuer_id, join_token))) {
     return apiError("FORBIDDEN", "Invalid join token");
   }
 
-  // refresh locations from live tick coords so RPC distance check is real
-  if (
-    isValidLatLng(rescuer_lat) &&
-    isValidLatLng(rescuer_lng) &&
-    isValidLatLng(victim_lat) &&
-    isValidLatLng(victim_lng)
-  ) {
-    const { error: locErr } = await sb.rpc("touch_rescue_locations", {
-      p_rescuer_id: rescuer_id,
-      p_rescuer_lat: rescuer_lat,
-      p_rescuer_lng: rescuer_lng,
-      p_victim_id: victim_id,
-      p_victim_lat: victim_lat,
-      p_victim_lng: victim_lng,
-    });
-    if (locErr) {
-      // fallback: direct updates if RPC missing
-      await sb
-        .from("room_players")
-        .update({
-          location: `POINT(${rescuer_lng} ${rescuer_lat})`,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("room_id", room_id)
-        .eq("player_id", rescuer_id);
-      await sb
-        .from("room_players")
-        .update({
-          location: `POINT(${victim_lng} ${victim_lat})`,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("room_id", room_id)
-        .eq("player_id", victim_id);
-    }
+  // rescuer reports OWN position only — victim position comes from the
+  // victim's own heartbeat (token-bound), never from this request
+  if (isValidCoords(rescuer_lat, rescuer_lng)) {
+    const { error: locErr } = await sb
+      .from("room_players")
+      .update({
+        location: `POINT(${rescuer_lng} ${rescuer_lat})`,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("room_id", room_id)
+      .eq("player_id", rescuer_id);
+    if (locErr) return apiError("DB_UNAVAILABLE", dbMessage(locErr));
   }
 
   const { data, error } = await sb.rpc("attempt_rescue", {

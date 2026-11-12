@@ -13,20 +13,14 @@ Edge functions are **not** the primary tick (stateless / timeout).
 
 ---
 
-## 2. Road graph (Overpass → G(V,E))
+## 2. Road graph (load order → G(V,E))
 
-### 2.1 Query (once per match Start)
+### 2.1 Sources (once per match Start, tiered O(1) fallback)
 
-```overpassql
-[out:json][timeout:15];
-(
-way["highway"~"^(footway|pedestrian|residential|living_street|tertiary|secondary|primary|service|path)$"]
-  (around:1200, {lat}, {lng});
-);
-out body;
-> ;
-> out skel qt;
-```
+1. `sessionStorage` cache of the last successful graph for this room.
+2. Bundled zone: `public/graphs/manifest.json` bbox match → zone JSON (e.g. `danang-center.json`).
+3. Real-time OSM API: `GET https://api.openstreetmap.org/api/0.6/map?bbox={s},{w},{n},{e}` (±1200 m around centroid); retry after 30 s on 429/timeout.
+4. All tiers fail → `pathfinding_mode = 'DIRECT_VECTOR_FALLBACK'`; the host retries tier 3 every 30 s in the background and hot-swaps the graph into the worker (`set_graph`).
 
 ### 2.2 Build rules
 
@@ -40,8 +34,8 @@ out body;
 
 | Condition | Action |
 | --- | --- |
-| Primary timeout/429 | Retry mirror once; total ≤ 10 s |
-| Still fail or 0 nodes | `pathfinding_mode = 'DIRECT_VECTOR_FALLBACK'` |
+| Cache/bundle/OSM API all fail or 0 nodes | `pathfinding_mode = 'DIRECT_VECTOR_FALLBACK'` |
+| OSM API 429/timeout | retry after 30 s, tiered (§2.1), background upgrade via `set_graph` |
 | Success | Mode `GRAPH_ASTAR` |
 
 ---
