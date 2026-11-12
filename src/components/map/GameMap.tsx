@@ -152,6 +152,8 @@ export function GameMap({
 }: GameMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const userDraggingRef = useRef(false);
+  const lastDragEndRef = useRef(0);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const ringRef = useRef<maplibregl.Marker | null>(null);
   const questRef = useRef<maplibregl.Marker | null>(null);
@@ -188,6 +190,8 @@ export function GameMap({
     });
     map.on("dataloading", (e) => dbg("map dataloading", (e as unknown as { dataType?: string }).dataType));
     map.on("idle", () => dbg("map idle (all tiles settled)"));
+    map.on("dragstart", () => { userDraggingRef.current = true; });
+    map.on("dragend", () => { userDraggingRef.current = false; lastDragEndRef.current = Date.now(); });
 
     map.on("load", async () => {
       dbg("map load fired", {
@@ -346,7 +350,12 @@ export function GameMap({
     }
     // recenter only when self marker would leave the viewport — free pan otherwise
     const map = mapRef.current;
-    if (map && !map.getBounds().contains(lngLat)) {
+    if (
+      map &&
+      !userDraggingRef.current &&
+      Date.now() - lastDragEndRef.current > 3000 &&
+      !map.getBounds().contains(lngLat)
+    ) {
       map.easeTo({ center: lngLat, duration: 500 });
     }
   }, [selfPos, noise]);
