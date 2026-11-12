@@ -353,13 +353,13 @@ export function GameMap({
     }
     // recenter only when self marker would leave the viewport — free pan otherwise
     const map = mapRef.current;
+    // auto-follow self unless user is dragging or recently dragged
     if (
       map &&
       !userDraggingRef.current &&
-      Date.now() - lastDragEndRef.current > 3000 &&
-      !map.getBounds().contains(lngLat)
+      Date.now() - lastDragEndRef.current > 5000
     ) {
-      map.easeTo({ center: lngLat, duration: 500 });
+      map.easeTo({ center: lngLat, duration: 300 });
     }
   }, [selfPos, noise]);
 

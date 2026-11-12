@@ -405,7 +405,20 @@ function tick(): void {
   zones = zones.filter((z) => z.expires_in_sec == null || z.expires_in_sec > 0);
 
   // despawn zombies far from all players
-  zombies = zombies.filter((z) => players.some((p) => haversineM(z, p) <= 400));
+  zombies = zombies.filter((z) => players.some((p) => haversineM(z, p) <= 1000));
+  // idle zombies drift back toward nearest player
+  for (const z of zombies) {
+    if (z.state === "WANDER" || z.state === "IDLE") {
+      const near = players.find((p) => p.state === "ALIVE");
+      if (near) {
+        const d = haversineM(z, near);
+        if (d > 200) {
+          z.goal = { lat: near.lat, lng: near.lng };
+          z.needsPath = true;
+        }
+      }
+    }
+  }
   // wave spawn every 60s
   if (now - lastWaveAt >= 60000 && players.length > 0) {
     lastWaveAt = now;
