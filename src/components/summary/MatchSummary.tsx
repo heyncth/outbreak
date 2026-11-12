@@ -32,6 +32,7 @@ export function MatchSummary({ roomCode, roomId, summary, endReason, track }: Ma
   const nickname = useGameStore((s) => s.nickname) ?? "Survivor";
   const [photo, setPhoto] = useState<HTMLImageElement | null>(null);
   const [shareState, setShareState] = useState<string | null>(null);
+  const [template, setTemplate] = useState<"dark" | "light" | "minimal">("dark");
   const [busy, setBusy] = useState(false);
   const [rematching, setRematching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +76,7 @@ export function MatchSummary({ roomCode, roomId, summary, endReason, track }: Ma
         endReason,
         track,
         photo,
+        template,
       });
       const result = await shareOrDownload(blob, `outbreak-${roomCode}.png`);
       setShareState(result === "shared" ? "Shared" : "Downloaded PNG");
@@ -161,6 +163,17 @@ export function MatchSummary({ roomCode, roomId, summary, endReason, track }: Ma
 
       <section className="rounded border border-line bg-panel p-3">
         <h2 className="mb-2 text-sm font-semibold text-muted">Share card</h2>
+        <div className="mb-2 flex gap-2">
+          {(["dark", "light", "minimal"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTemplate(t)}
+              className={`flex-1 rounded border px-2 py-1 text-xs ${template === t ? "border-safe bg-safe/10 text-safe" : "border-line text-muted"}`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
         <div className="flex flex-col gap-2">
           <button
             data-testid="pick-photo"

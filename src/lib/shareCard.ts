@@ -12,6 +12,7 @@ export interface ShareCardInput {
   endReason: string;
   track: LatLng[];
   photo: HTMLImageElement | null;
+  template?: "dark" | "light" | "minimal";
 }
 
 /** Project WGS84 track into canvas box (letterboxed). Pure — unit-testable. */
@@ -67,20 +68,27 @@ export async function renderShareCard(input: ShareCardInput): Promise<Blob> {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("canvas unsupported");
 
-  ctx.fillStyle = "#090D16";
+  const template = input.template ?? "dark";
+  const isLight = template === "light";
+  const isMinimal = template === "minimal";
+  const bg = isLight ? "#f4f7f4" : "#090D16";
+  const fg = isLight ? "#0f1a0f" : "#F9FAFB";
+  const muted = isLight ? "#5a6b5a" : "#9CA3AF";
+  const accent = isLight ? "#16a34a" : "#10B981";
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, w, h);
 
-  if (input.photo) {
+  if (!isMinimal && input.photo) {
     const img = input.photo;
     const scale = Math.max(w / img.width, h / img.height);
     const dw = img.width * scale;
     const dh = img.height * scale;
     ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
-    ctx.fillStyle = "rgba(9,13,22,0.55)";
+    ctx.fillStyle = isLight ? "rgba(244,247,244,0.55)" : "rgba(9,13,22,0.55)";
     ctx.fillRect(0, 0, w, h);
-  } else if (input.track.length >= 2) {
+  } else if (!isMinimal && input.track.length >= 2) {
     const pts = projectTrack(input.track, w, h, 120);
-    ctx.strokeStyle = "#10B981";
+    ctx.strokeStyle = accent;
     ctx.lineWidth = 6;
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
@@ -90,30 +98,31 @@ export async function renderShareCard(input: ShareCardInput): Promise<Blob> {
     const first = pts[0];
     const last = pts[pts.length - 1];
     if (first && last) {
-      ctx.fillStyle = "#3B82F6";
+      ctx.fillStyle = accent;
       ctx.beginPath();
       ctx.arc(first.x, first.y, 10, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#EF4444";
+      ctx.fillStyle = "#dc2626";
       ctx.beginPath();
       ctx.arc(last.x, last.y, 10, 0, Math.PI * 2);
       ctx.fill();
     }
   }
+  }
 
   // bottom stats panel
   const grad = ctx.createLinearGradient(0, h * 0.45, 0, h);
-  grad.addColorStop(0, "rgba(9,13,22,0)");
-  grad.addColorStop(0.35, "rgba(9,13,22,0.85)");
-  grad.addColorStop(1, "rgba(9,13,22,0.97)");
+  grad.addColorStop(0, "rgba(244,247,244,0)");
+  grad.addColorStop(0.35, "rgba(244,247,244,0.85)");
+  grad.addColorStop(1, "rgba(244,247,244,0.97)");
   ctx.fillStyle = grad;
   ctx.fillRect(0, h * 0.45, w, h * 0.55);
 
-  ctx.fillStyle = "#F9FAFB";
+  ctx.fillStyle = fg;
   ctx.font = "700 52px system-ui, sans-serif";
   ctx.fillText(input.title, 64, h - 420);
 
-  ctx.fillStyle = "#9CA3AF";
+  ctx.fillStyle = muted;
   ctx.font = "500 28px system-ui, sans-serif";
   ctx.fillText(`OUTBREAK · ${input.roomCode} · ${input.nickname}`, 64, h - 370);
 
@@ -127,19 +136,19 @@ export async function renderShareCard(input: ShareCardInput): Promise<Blob> {
   const colW = (w - 128) / stats.length;
   stats.forEach(([label, value], i) => {
     const x = 64 + i * colW;
-    ctx.fillStyle = "#9CA3AF";
+    ctx.fillStyle = muted;
     ctx.font = "600 22px system-ui, sans-serif";
     ctx.fillText(label, x, h - 280);
-    ctx.fillStyle = "#F9FAFB";
+    ctx.fillStyle = fg;
     ctx.font = "700 40px system-ui, sans-serif";
     ctx.fillText(value, x, h - 220);
   });
 
-  ctx.fillStyle = "#10B981";
+  ctx.fillStyle = accent;
   ctx.font = "700 26px system-ui, sans-serif";
   ctx.fillText(input.endReason.replace(/_/g, " "), 64, h - 140);
 
-  ctx.fillStyle = "#6B7280";
+  ctx.fillStyle = muted;
   ctx.font = "500 22px system-ui, sans-serif";
   ctx.fillText("I survived the outbreak.", 64, h - 80);
 
