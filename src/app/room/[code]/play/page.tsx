@@ -751,6 +751,21 @@ export default function PlayPage() {
     };
   }, [syncPlayerState]);
 
+  const loading = !snapshot || snapshot.status !== "ACTIVE" || !workerRef.current;
+  if (loading && !matchEnded) {
+    return (
+      <main
+        className="flex min-h-screen flex-col items-center justify-center gap-4 bg-cover bg-center text-text"
+        style={{ backgroundImage: "url('/brand/banner-916.webp')" }}
+      >
+        <div className="flex flex-col items-center gap-4 rounded bg-bg/80 px-6 py-8 backdrop-blur-sm">
+          <img src="/brand/logo.webp" alt="OUTBREAK" className="h-16 w-auto" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-safe border-t-transparent" />
+          <p className="text-sm text-muted">{status || "Loading…"}</p>
+        </div>
+      </main>
+    );
+  }
   if (matchEnded && matchSummary) {
     return (
       <MatchSummary
