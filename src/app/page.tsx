@@ -103,17 +103,7 @@ export default function HomePage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col gap-4 p-4">
       <header className="flex items-center justify-between border-b border-line pb-3">
-        <div className="flex items-center gap-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/logo.webp"
-            alt="OUTBREAK"
-            width={32}
-            height={32}
-            className="h-8 w-8 rounded"
-          />
-          <h1 className="text-2xl font-bold tracking-widest text-safe">OUTBREAK</h1>
-        </div>
+        <h1 className="text-2xl font-bold tracking-widest text-safe">OUTBREAK</h1>
         <span
           data-testid="gps-chip"
           className={`text-xs ${
@@ -128,10 +118,6 @@ export default function HomePage() {
           {devSim ? " · devsim" : ""}
         </span>
       </header>
-
-      <p className="text-sm text-muted">
-        Real-world GPS zombie survival. Walk the streets. Stay alive.
-      </p>
 
       <label className="flex flex-col gap-1 text-sm">
         Nickname
@@ -211,15 +197,7 @@ export default function HomePage() {
         <p className="text-sm text-muted">Waiting for GPS…</p>
       )}
 
-      {(selfPos || center) && (
-        <div className="relative mt-2 h-[45vh] min-h-[280px] overflow-hidden rounded border border-line">
-          <GameMap
-            center={selfPos ?? center}
-            selfPos={selfPos}
-            noise={reading?.noise ?? 0.05}
-          />
-        </div>
-      )}
+      {/* map preview removed for cleaner home */}
     </main>
   );
 }

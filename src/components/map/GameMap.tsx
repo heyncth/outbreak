@@ -237,7 +237,7 @@ export function GameMap({
         source: ZOMBIE_GEOJSON,
         layout: {
           "icon-image": ["get", "icon"],
-          "icon-size": ["match", ["get", "type"], "BRUTE", 1.35, 1],
+          "icon-size": 0.45,
           "icon-allow-overlap": true,
           "icon-ignore-placement": true,
         },

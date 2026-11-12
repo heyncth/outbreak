@@ -114,9 +114,7 @@ export function SurvivalHUD({
         <div className="flex items-center justify-between gap-3 text-xs">
           <div className="flex-1">
             <div className="mb-1 flex justify-between">
-              <span className="text-muted">
-                HP {nickname ? `· ${nickname}` : ""}
-              </span>
+              <span className="text-base font-bold text-text">{nickname ?? "Survivor"}</span>
               <span
                 className="font-mono tabular-nums text-text"
                 aria-live="polite"
@@ -125,6 +123,7 @@ export function SurvivalHUD({
                 {Math.round(hp)}/{maxHp}
               </span>
             </div>
+            <div className="mb-1 text-xs text-muted">HP</div>
             <div
               role="progressbar"
               aria-valuenow={Math.round(hp)}
@@ -142,7 +141,6 @@ export function SurvivalHUD({
             <div className="text-safe" data-testid="match-timer">
               {fmtTime(tick?.elapsed_sec ?? 0)}
             </div>
-            <div className="text-muted">{tick?.zombies.length ?? 0} zombies</div>
           </div>
         </div>
         {statusLine && <p className="mt-1 text-xs text-muted">{statusLine}</p>}

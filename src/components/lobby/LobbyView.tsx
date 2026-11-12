@@ -164,6 +164,15 @@ export function LobbyView({ roomCode }: LobbyViewProps) {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col gap-3 p-4">
       <header className="flex items-baseline justify-between border-b border-line pb-2">
+        <button
+          onClick={() => router.push("/")}
+          aria-label="Back"
+          className="flex items-center text-muted hover:text-text"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+        </button>
         <h1 className="text-xl font-bold tracking-widest text-safe">LOBBY</h1>
         <span className="text-xs text-muted">{connected ? "Live" : "Connecting…"}</span>
       </header>
