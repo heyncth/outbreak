@@ -214,7 +214,7 @@ export function GameMap({
         WALKER: "/icons/walker.png",
         RUNNER: "/icons/runner.png",
         STALKER: "/icons/stalker.png",
-        SCREAMER: "/icons/brute.png",
+        SCREAMER: "/icons/screamer.png",
         BRUTE: "/icons/brute.png",
       };
       for (const t of ZOMBIE_TYPES) {
