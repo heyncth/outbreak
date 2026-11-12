@@ -1,6 +1,7 @@
 import { haversineM, toRadians } from "@/lib/geoUtils";
 import { dbg } from "@/lib/debug";
 import type { LatLng } from "@/types/game";
+import zoneManifest from "../../public/graphs/manifest.json";
 
 export type PathfindingMode = "GRAPH_ASTAR" | "DIRECT_VECTOR_FALLBACK";
 
@@ -28,22 +29,12 @@ export interface GraphResult {
   build_ms: number;
 }
 
-export const OVERPASS_RADIUS_M = 1200;
-export const OVERPASS_TIMEOUT_MS = 8000;
-export const GRAPH_TOTAL_BUDGET_MS = 10_000;
 export const GRID_SIZE_M = 100;
 
-const DEFAULT_ENDPOINTS = [
-  "https://overpass-api.de/api/interpreter",
-  "https://z.overpass-api.de/api/interpreter",
-  "https://lz4.overpass-api.de/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter",
-  "https://overpass.private.coffee/api/interpreter",
-  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
-];
-
-const HIGHWAY_RE =
-  "^(footway|pedestrian|residential|living_street|tertiary|secondary|primary|service|path)$";
+const OSM_BBOX_RADIUS_M = 1200;
+const OSM_API_TIMEOUT_MS = 8000;
+const OSM_HIGHWAY_RE =
+  /^(footway|pedestrian|residential|living_street|tertiary|secondary|primary|service|path)$/;
 
 export function gridKey(lat: number, lng: number): string {
   const cellLat = GRID_SIZE_M / 111_320;
@@ -116,56 +107,39 @@ export function findNearestGraphNode(g: RoadGraph, p: LatLng): string | null {
   return best;
 }
 
-interface OverpassNode {
+interface ZoneNode {
   type: "node";
   id: number;
   lat: number;
   lon: number;
 }
 
-interface OverpassWay {
+interface ZoneWay {
   type: "way";
   id: number;
   nodes: number[];
 }
 
-interface OverpassOut {
-  elements: Array<OverpassNode | OverpassWay>;
+interface ZoneData {
+  elements: Array<ZoneNode | ZoneWay>;
 }
 
-function buildQuery(lat: number, lng: number): string {
-  return `[out:json][timeout:15];
-(
-way["highway"~"${HIGHWAY_RE}"]
-  (around:${OVERPASS_RADIUS_M}, ${lat}, ${lng});
-);
-out body;
->;
-out skel qt;`;
+interface Zone {
+  name: string;
+  /** [south, west, north, east] */
+  bbox: [number, number, number, number];
 }
 
-async function fetchEndpoint(
-  endpoint: string,
-  query: string,
-  timeoutMs: number
-): Promise<OverpassOut> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch("/api/osm/overpass", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, endpoint }),
-      signal: ctrl.signal,
-    });
-    if (!res.ok) throw new Error(`Overpass ${res.status}`);
-    return (await res.json()) as OverpassOut;
-  } finally {
-    clearTimeout(timer);
+export function findZone(p: LatLng): string | null {
+  const zones = zoneManifest.zones as Zone[];
+  for (const z of zones) {
+    const [s, w, n, e] = z.bbox;
+    if (p.lat >= s && p.lat <= n && p.lng >= w && p.lng <= e) return z.name;
   }
+  return null;
 }
 
-export function buildGraphFromOverpass(data: OverpassOut): RoadGraph {
+export function buildGraphFromOverpass(data: ZoneData): RoadGraph {
   const g = emptyGraph();
   for (const el of data.elements) {
     if (el.type === "node") {
@@ -182,6 +156,54 @@ export function buildGraphFromOverpass(data: OverpassOut): RoadGraph {
     }
   }
   return g;
+}
+
+/** shortcut: OSM XML is machine-generated (fixed attr order k then v) — regex scan instead of DOMParser; swap for a real parser if format drifts */
+function parseOsmXml(xml: string): RoadGraph {
+  const g = emptyGraph();
+  for (const m of xml.matchAll(/<node\b([^>]*)>/g)) {
+    const attrs = m[1] ?? "";
+    const id = /\bid="(\d+)"/.exec(attrs)?.[1];
+    const lat = /\blat="([^"]+)"/.exec(attrs)?.[1];
+    const lon = /\blon="([^"]+)"/.exec(attrs)?.[1];
+    if (id && lat && lon) addNode(g, { id, lat: Number(lat), lng: Number(lon) });
+  }
+  for (const m of xml.matchAll(/<way\b[^>]*>([\s\S]*?)<\/way>/g)) {
+    const body = m[1] ?? "";
+    const hw = /<tag\b[^>]*\bk="highway"[^>]*\bv="([^"]+)"/.exec(body)?.[1];
+    if (!hw || !OSM_HIGHWAY_RE.test(hw)) continue;
+    const refs = [...body.matchAll(/<nd\b[^>]*\bref="(\d+)"/g)].map((r) => r[1]);
+    for (let i = 0; i < refs.length - 1; i++) {
+      const a = refs[i];
+      const b = refs[i + 1];
+      if (!a || !b) continue;
+      addEdge(g, a, b);
+      addEdge(g, b, a);
+    }
+  }
+  return g;
+}
+
+async function fetchOsmApiGraph(center: LatLng): Promise<RoadGraph | null> {
+  const dLat = OSM_BBOX_RADIUS_M / 111_320;
+  const dLng =
+    OSM_BBOX_RADIUS_M / Math.max(1, 111_320 * Math.cos(toRadians(center.lat)));
+  // OSM bbox order: minLon,minLat,maxLon,maxLat
+  const bbox = `${center.lng - dLng},${center.lat - dLat},${center.lng + dLng},${center.lat + dLat}`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), OSM_API_TIMEOUT_MS);
+  try {
+    const res = await fetch(`https://api.openstreetmap.org/api/0.6/map?bbox=${bbox}`, {
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new Error(`OSM_API ${res.status}`);
+    const g = parseOsmXml(await res.text());
+    if (g.nodes.size === 0) return null;
+    dbg("osm api graph", { nodes: g.nodes.size, edges: g.edges.size });
+    return g;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function cacheKey(lat: number, lng: number): string {
@@ -226,42 +248,53 @@ function writeCache(lat: number, lng: number, result: GraphResult): void {
 }
 
 /**
- * Fetch OSM walkable graph once per match. Primary → mirror once;
- * total ≤ 10 s else DIRECT_VECTOR_FALLBACK.
+ * Graph sources in order: sessionStorage cache → bundled zone → OSM API bbox
+ * (real-time extract, any location) → DIRECT_VECTOR_FALLBACK.
  */
 export async function loadRoadGraph(center: LatLng): Promise<GraphResult> {
   const cached = readCache(center.lat, center.lng);
   if (cached) return cached;
 
   const t0 = Date.now();
-  const endpoints = process.env.NEXT_PUBLIC_OVERPASS_URL
-    ? [process.env.NEXT_PUBLIC_OVERPASS_URL, ...DEFAULT_ENDPOINTS]
-    : DEFAULT_ENDPOINTS;
-  const query = buildQuery(center.lat, center.lng);
-
-  for (const endpoint of endpoints) {
-    const elapsed = Date.now() - t0;
-    const remaining = GRAPH_TOTAL_BUDGET_MS - elapsed;
-    if (remaining <= 0) break;
-    const timeout = Math.min(OVERPASS_TIMEOUT_MS, remaining);
+  const zone = findZone(center);
+  if (zone) {
     try {
-      const data = await fetchEndpoint(endpoint, query, timeout);
+      const res = await fetch(`/graphs/${zone}.json`);
+      if (!res.ok) throw new Error(`zone ${res.status}`);
+      const data = (await res.json()) as ZoneData;
       const graph = buildGraphFromOverpass(data);
-      if (graph.nodes.size > 0) {
-        const result: GraphResult = {
-          graph,
-          mode: "GRAPH_ASTAR",
-          build_ms: Date.now() - t0,
-        };
-        writeCache(center.lat, center.lng, result);
-        return result;
-      }
-      dbg("overpass empty", endpoint);
+      if (graph.nodes.size === 0) throw new Error("zone graph empty");
+      const result: GraphResult = {
+        graph,
+        mode: "GRAPH_ASTAR",
+        build_ms: Date.now() - t0,
+      };
+      writeCache(center.lat, center.lng, result);
+      dbg("zone graph loaded", { zone, nodes: graph.nodes.size });
+      return result;
     } catch (e) {
-      dbg("overpass fail", endpoint, e instanceof Error ? e.message : String(e));
+      dbg("zone load fail", zone, e instanceof Error ? e.message : String(e));
     }
+  } else {
+    dbg("no bundled zone — trying OSM API");
   }
 
-  dbg("overpass exhausted — falling back to DIRECT_VECTOR", { budget_ms: GRAPH_TOTAL_BUDGET_MS });
+  // real-time extract by bbox: any Vietnam location, no server
+  try {
+    const g = await fetchOsmApiGraph(center);
+    if (g) {
+      const result: GraphResult = {
+        graph: g,
+        mode: "GRAPH_ASTAR",
+        build_ms: Date.now() - t0,
+      };
+      writeCache(center.lat, center.lng, result);
+      return result;
+    }
+    dbg("osm api empty graph");
+  } catch (e) {
+    dbg("osm api fail", e instanceof Error ? e.message : String(e));
+  }
+
   return { graph: null, mode: "DIRECT_VECTOR_FALLBACK", build_ms: Date.now() - t0 };
 }

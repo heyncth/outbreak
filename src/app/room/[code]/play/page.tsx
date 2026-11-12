@@ -539,6 +539,31 @@ export default function PlayPage() {
     }
   }, [isHost, worldTick]);
 
+  // background graph upgrade: initial load fell back to free-move — retry OSM API every 30 s
+  useEffect(() => {
+    if (!isHost || !workerReady || !workerRef.current) return;
+    if (pathfindingMode !== "DIRECT_VECTOR_FALLBACK") return;
+    if (endedLocally || matchEnded) return;
+    const snapshot = snapshotRef.current;
+    const center = {
+      lat: snapshot?.center_lat ?? reading?.lat ?? 16.054407,
+      lng: snapshot?.center_lng ?? reading?.lng ?? 108.202167,
+    };
+    const timer = setInterval(() => {
+      void (async () => {
+        const r = await loadRoadGraph(center);
+        if (r.mode !== "GRAPH_ASTAR" || !r.graph) return;
+        workerRef.current?.postMessage({ type: "set_graph", graph: r.graph, mode: r.mode } satisfies WorkerIn);
+        setPathfinding("GRAPH_ASTAR", null);
+        setStatus("Road graph ready · zombies follow roads");
+        dbg("background graph upgrade", { nodes: r.graph.nodes.size });
+        clearInterval(timer);
+      })();
+    }, 30_000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, workerReady, pathfindingMode, endedLocally, matchEnded]);
+
   // zone cooldown countdown (local after create)
   useEffect(() => {
     if (zoneCooldownSec <= 0) return;

@@ -77,6 +77,7 @@ export type WorkerIn =
       restoreTick?: WorldStateTick;
     }
   | { type: "players"; players: PlayerWorld[] }
+  | { type: "set_graph"; graph: RoadGraph | null; mode: PathfindingMode }
   | { type: "add_zone"; zone: SafeZoneTick }
   | { type: "apply_rescue"; rescuerId: string; victimId: string }
   | { type: "stop" };
@@ -746,6 +747,11 @@ self.onmessage = (ev: MessageEvent<WorkerIn>) => {
     timer = setInterval(tick, TICK_MS);
   } else if (msg.type === "players") {
     players = msg.players.map((p) => ({ ...p }));
+  } else if (msg.type === "set_graph") {
+    dbg("worker set_graph", { mode: msg.mode, nodes: msg.graph?.nodes.size ?? 0 });
+    graph = msg.graph;
+    mode = msg.mode;
+    pathQueue = [];
   } else if (msg.type === "add_zone") {
     if (!zones.some((z) => z.id === msg.zone.id)) {
       zones.push({ ...msg.zone });
