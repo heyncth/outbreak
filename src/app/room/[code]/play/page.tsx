@@ -67,6 +67,7 @@ export default function PlayPage() {
   const [rescuePending, setRescuePending] = useState(false);
   const [endedLocally, setEndedLocally] = useState(false);
   const workerRef = useRef<Worker | null>(null);
+  const [workerReady, setWorkerReady] = useState(false);
   const playersRef = useRef<Map<string, PlayerWorld>>(new Map());
   const broadcastTickRef = useRef<((t: WorldStateTick) => void) | null>(null);
   const broadcastActionRef = useRef<
@@ -450,6 +451,7 @@ export default function PlayPage() {
         type: "module",
       });
       workerRef.current = worker;
+      setWorkerReady(true);
       dbg("host: worker created");
       worker.onerror = (e) => dbg("host: worker ERROR", e.message ?? e);
       worker.onmessage = (ev: MessageEvent<WorkerOut>) => {
@@ -525,6 +527,7 @@ export default function PlayPage() {
       workerRef.current?.postMessage({ type: "stop" } satisfies WorkerIn);
       workerRef.current?.terminate();
       workerRef.current = null;
+      setWorkerReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, snapshot?.status, snapshot?.room_id, endedLocally, matchEnded]);
@@ -753,7 +756,7 @@ export default function PlayPage() {
     };
   }, [syncPlayerState]);
 
-  const loading = !snapshot || snapshot.status !== "ACTIVE" || !workerRef.current;
+  const loading = !snapshot || snapshot.status !== "ACTIVE" || !workerReady;
   if (loading && !matchEnded) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg text-text">
