@@ -10,11 +10,11 @@ const STYLE_URL =
   "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
 const ZOMBIE_COLORS: Record<string, string> = {
-  WALKER: "#94a3b8",
-  RUNNER: "#f97316",
-  STALKER: "#a78bfa",
-  SCREAMER: "#f472b6",
-  BRUTE: "#ef4444",
+  WALKER: "#475569",
+  RUNNER: "#ea580c",
+  STALKER: "#7c3aed",
+  SCREAMER: "#db2777",
+  BRUTE: "#dc2626",
 };
 
 const ZOMBIE_TYPES = ["WALKER", "RUNNER", "STALKER", "SCREAMER", "BRUTE"] as const;
@@ -213,10 +213,18 @@ export function GameMap({
       for (const t of ZOMBIE_TYPES) {
         const id = `zombie-${t}`;
         if (!map.hasImage(id)) {
-          map.addImage(
-            id,
-            zombieIconImage(t, ZOMBIE_COLORS[t] ?? "#ef4444") as unknown as HTMLImageElement
-          );
+          try {
+            const canvas = zombieIconImage(t, ZOMBIE_COLORS[t] ?? "#ef4444");
+            const ctx2 = canvas.getContext("2d");
+            const imgData = ctx2?.getImageData(0, 0, canvas.width, canvas.height);
+            map.addImage(id, {
+              width: canvas.width,
+              height: canvas.height,
+              data: imgData ? new Uint8Array(imgData.data.buffer) : new Uint8Array(0),
+            });
+          } catch {
+            // image add failed; layer will fall back to default marker
+          }
         }
       }
       map.addLayer({
