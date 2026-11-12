@@ -14,3 +14,4 @@ playwright-report/
 tsconfig.tsbuildinfo
 *.tsbuildinfo
 supabase/.temp/
+screens/
