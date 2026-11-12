@@ -458,7 +458,7 @@ export default function PlayPage() {
         const msg = ev.data;
         if (msg.type === "ready") {
           dbg("host: worker ready", { zombies: msg.zombieCount, mode: msg.mode });
-          setStatus(`Zombies: ${msg.zombieCount} (${msg.mode})`);
+          setStatus("Live");
         } else if (msg.type === "tick") {
           if (msg.payload.tick_id % 10 === 1) {
             dbg("host: tick", msg.payload.tick_id, `t+${msg.payload.elapsed_sec}s`, `zombies=${msg.payload.zombies.length}`);
@@ -855,12 +855,19 @@ export default function PlayPage() {
           <span className="text-muted">{status}</span>
         </div>
         {graphNotice && <p className="mt-1 text-warn">{graphNotice}</p>}
-        <div className="mt-1 flex gap-3 text-muted">
-          <span>{worldTick?.elapsed_sec ?? 0}s</span>
-          <span>z {worldTick?.zombies.length ?? 0}</span>
-          <span>sz {worldTick?.safe_zones.length ?? 0}</span>
-          <span>{Math.round(distanceM)}m</span>
+        <div className="mt-1 flex flex-wrap gap-3 text-sm text-muted">
+          <span>zombies {worldTick?.zombies.length ?? 0}</span>
+          <span>safe zones {worldTick?.safe_zones.length ?? 0}</span>
+          <span>{Math.round(distanceM)}m walked</span>
           <span>{knockdowns} knocks</span>
+          {worldTick?.quest?.status === "ACTIVE" && (
+            <span className="text-safe">
+              quest {Math.round(haversineM(
+                selfPos ?? { lat: 0, lng: 0 },
+                { lat: worldTick.quest.target_lat, lng: worldTick.quest.target_lng }
+              ))}m · {Math.max(0, Math.ceil((worldTick.quest.deadline_ms - Date.now()) / 1000))}s
+            </span>
+          )}
         </div>
         {!isHost && !worldTick && (
           <p className="mt-1 text-muted">Waiting for host tick…</p>

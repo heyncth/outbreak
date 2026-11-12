@@ -142,8 +142,6 @@ function newQuest(): void {
     status: "ACTIVE",
     bonusM: dist,
   };
-  // despawn all zombies on new quest
-  zombies = [];
   lastWaveAt = Date.now();
   waveCount = 0;
 }
