@@ -17,6 +17,7 @@ import {
   clearMatchProgress,
 } from "@/lib/matchProgress";
 import { isDevSim } from "@/lib/devSim";
+import { haversineM } from "@/lib/geoUtils";
 import { readSession } from "@/lib/session";
 import { dbg } from "@/lib/debug";
 import { useWakeLock } from "@/hooks/useWakeLock";
