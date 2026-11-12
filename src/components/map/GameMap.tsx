@@ -87,6 +87,7 @@ interface GameMapProps {
   noise: number;
   zombies?: ZombieTick[];
   worldTick?: WorldStateTick | null;
+  quest?: WorldStateTick["quest"];
 }
 
 function toFeatureCollection(zombies: ZombieTick[]): GeoJSON.FeatureCollection {
@@ -147,11 +148,13 @@ export function GameMap({
   noise,
   zombies = [],
   worldTick,
+  quest,
 }: GameMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const ringRef = useRef<maplibregl.Marker | null>(null);
+  const questRef = useRef<maplibregl.Marker | null>(null);
   const centerRef = useRef(center);
   const selfRef = useRef(selfPos);
   const noiseRef = useRef(noise);
@@ -205,6 +208,12 @@ export function GameMap({
       markerRef.current = new maplibregl.Marker({ element: selfEl })
         .setLngLat([centerRef.current.lng, centerRef.current.lat])
         .addTo(map);
+
+      const questEl = document.createElement("div");
+      questEl.setAttribute("data-testid", "quest-marker");
+      questEl.style.cssText =
+        "width:20px;height:20px;border-radius:50%;background:#3b82f6;border:2px solid #fff;box-shadow:0 0 10px #3b82f6;animation:pulse 1.5s infinite;";
+      questRef.current = new maplibregl.Marker({ element: questEl }).addTo(map);
 
       map.addSource(ZOMBIE_GEOJSON, {
         type: "geojson",
@@ -299,14 +308,26 @@ export function GameMap({
     });
 
     return () => {
-      markerRef.current?.remove();
+       markerRef.current?.remove();
       ringRef.current?.remove();
+      questRef.current?.remove();
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
       ringRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const qm = questRef.current;
+    if (!qm || !mapRef.current) return;
+    if (quest && quest.status === "ACTIVE") {
+      qm.setLngLat([quest.target_lng, quest.target_lat]);
+      qm.getElement().style.display = "block";
+    } else {
+      qm.getElement().style.display = "none";
+    }
+  }, [quest]);
 
   useEffect(() => {
     if (selfPos) selfRef.current = selfPos;

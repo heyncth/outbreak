@@ -831,6 +831,7 @@ export default function PlayPage() {
           noise={noise}
           zombies={worldTick?.zombies ?? []}
           worldTick={worldTick}
+          quest={worldTick?.quest ?? null}
         />
         <SurvivalHUD
           tick={worldTick}
