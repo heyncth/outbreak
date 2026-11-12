@@ -113,17 +113,16 @@ export function SurvivalHUD({
       <div className="pointer-events-auto rounded border border-line bg-bg/90 px-3 py-2 ">
         <div className="flex items-center justify-between gap-3 text-xs">
           <div className="flex-1">
-            <div className="mb-1 flex justify-between">
+            <div className="mb-1">
               <span className="text-base font-bold text-text">{nickname ?? "Survivor"}</span>
-              <span
-                className="font-mono tabular-nums text-text"
-                aria-live="polite"
-                data-testid="hp-label"
-              >
-                {Math.round(hp)}/{maxHp}
-              </span>
             </div>
-            <div className="mb-1 text-xs text-muted">HP</div>
+            <div
+              className="mb-1 text-xs text-muted"
+              aria-live="polite"
+              data-testid="hp-label"
+            >
+              HP {Math.round(hp)}/{maxHp}
+            </div>
             <div
               role="progressbar"
               aria-valuenow={Math.round(hp)}

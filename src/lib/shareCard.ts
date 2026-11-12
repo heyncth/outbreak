@@ -15,7 +15,6 @@ export interface ShareCardInput {
   template?: "dark" | "light" | "minimal";
 }
 
-/** Project WGS84 track into canvas box (letterboxed). Pure — unit-testable. */
 export function projectTrack(
   track: readonly LatLng[],
   width: number,
@@ -58,7 +57,6 @@ function fmtDistance(m: number): string {
   return m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`;
 }
 
-/** Draw 1080×1080 share card. Photo bg if present, else dark + route. */
 export async function renderShareCard(input: ShareCardInput): Promise<Blob> {
   const w = 1080;
   const h = 1080;
@@ -108,13 +106,11 @@ export async function renderShareCard(input: ShareCardInput): Promise<Blob> {
       ctx.fill();
     }
   }
-  }
 
-  // bottom stats panel
   const grad = ctx.createLinearGradient(0, h * 0.45, 0, h);
-  grad.addColorStop(0, "rgba(244,247,244,0)");
-  grad.addColorStop(0.35, "rgba(244,247,244,0.85)");
-  grad.addColorStop(1, "rgba(244,247,244,0.97)");
+  grad.addColorStop(0, isLight ? "rgba(244,247,244,0)" : "rgba(9,13,22,0)");
+  grad.addColorStop(0.35, isLight ? "rgba(244,247,244,0.85)" : "rgba(9,13,22,0.85)");
+  grad.addColorStop(1, isLight ? "rgba(244,247,244,0.97)" : "rgba(9,13,22,0.97)");
   ctx.fillStyle = grad;
   ctx.fillRect(0, h * 0.45, w, h * 0.55);
 

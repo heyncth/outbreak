@@ -847,7 +847,6 @@ export default function PlayPage() {
       <footer className="z-10 border-t border-line bg-bg/90 px-3 py-2 text-xs">
         <div className="flex justify-between">
           <span className="text-muted">{status}</span>
-          <span className="text-muted">{pathfindingMode}</span>
         </div>
         {graphNotice && <p className="mt-1 text-warn">{graphNotice}</p>}
         <div className="mt-1 flex gap-3 text-muted">
